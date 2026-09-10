@@ -1,0 +1,321 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Player {
+  id       Int @id @default(autoincrement())
+  /** The real-world sofifa/EA player id — stable across years for the same
+   *  person, but no longer unique on its own now that one real player has
+   *  a row per year (see `year`). */
+  sofifaId Int
+  /** Real-world year this card's stats are from (e.g. 2019), not the FIFA
+   *  edition number — derived as 2000 + fifa_version at import time. */
+  year     Int
+  name        String
+  fullName    String
+  positions     String
+  positionGroup String @default("MID")
+  nationality   String
+  club        String @default("")
+  clubId      Int?
+  league      String @default("")
+  overall     Int
+  potential   Int
+  age         Int
+  dob         String
+  heightCm    Int
+  weightKg    Int
+  valueEur    Int
+  wageEur     Int
+
+  preferredFoot           String
+  weakFoot                Int
+  skillMoves              Int
+  internationalReputation Int
+  workRate                String
+
+  pace      Int
+  shooting  Int
+  passing   Int
+  dribbling Int
+  defending Int
+  physic    Int
+
+  imageUrl String
+
+  attackingCrossing        Int
+  attackingFinishing       Int
+  attackingHeadingAccuracy Int
+  attackingShortPassing    Int
+  attackingVolleys         Int
+
+  skillDribbling   Int
+  skillCurve       Int
+  skillFkAccuracy  Int
+  skillLongPassing Int
+  skillBallControl Int
+
+  movementAcceleration Int
+  movementSprintSpeed  Int
+  movementAgility      Int
+  movementReactions    Int
+  movementBalance      Int
+
+  powerShotPower Int
+  powerJumping   Int
+  powerStamina   Int
+  powerStrength  Int
+  powerLongShots Int
+
+  mentalityAggression    Int
+  mentalityInterceptions Int
+  mentalityPositioning   Int
+  mentalityVision        Int
+  mentalityPenalties     Int
+  mentalityComposure     Int
+
+  defendingMarkingAwareness Int
+  defendingStandingTackle   Int
+  defendingSlidingTackle    Int
+
+  goalkeepingDiving      Int
+  goalkeepingHandling    Int
+  goalkeepingKicking     Int
+  goalkeepingPositioning Int
+  goalkeepingReflexes    Int
+
+  draftPicks DraftPick[]
+
+  @@unique([sofifaId, year])
+  @@index([overall])
+  @@index([positions])
+  @@index([positionGroup])
+  @@index([year])
+  // The draft board's candidate queries always filter position group +
+  // league together and sort by overall — without a compound index SQLite
+  // can only use the plain positionGroup index above, then filters league
+  // row-by-row and sorts the survivors in a temp B-tree. Fine at ~18k rows,
+  // very noticeably slow (this index was added after a real lag report)
+  // once the multi-year import brought the table to ~180k rows.
+  @@index([positionGroup, league, overall])
+  // Same story for the CPU "affinity" lookup (same club/nation as a
+  // teammate already drafted) — club/nationality were unindexed text
+  // columns being scanned row-by-row after the positionGroup narrow-down.
+  @@index([club])
+  @@index([nationality])
+}
+
+/** Teams are generated per-draft (not shared) — the set of clubs depends on
+ *  which leagues the user picked when starting this draft. */
+model Team {
+  id         Int    @id @default(autoincrement())
+  draftId    Int
+  league     String
+  name       String
+  shortName  String
+  slug       String
+  draftOrder Int
+  /** Real-world sofifa club id, for crests. Null only for a club we somehow
+   *  have players for but no id. */
+  clubId     Int?
+  /** The shape this team drafts for and is rated in. The user's is chosen at
+   *  setup; CPU teams get their own, so the field they compete in isn't all
+   *  chasing the same eleven roles. */
+  formation  String @default("4-3-3")
+
+  draft        Draft       @relation("DraftTeams", fields: [draftId], references: [id])
+  chosenByDraft Draft?     @relation("UserTeam")
+  draftPicks   DraftPick[]
+  coachPicks   CoachPick[]
+  cardPacks    CardPack[]
+
+  @@unique([draftId, draftOrder])
+  @@unique([draftId, slug])
+}
+
+model Draft {
+  id               Int      @id @default(autoincrement())
+  userTeamId       Int?     @unique
+  leagues          String   @default("Premier League")
+  /** Comma-separated real-world player card years this draft can pull from
+   *  (e.g. "2026" or "2023,2022,2021"). Up to 3 years, chosen at setup. */
+  years            String   @default("2026")
+  /** Chosen at setup and locked for the whole draft — see formations.ts. */
+  formation        String   @default("4-3-3")
+  currentPick      Int      @default(1)
+  status           String   @default("selecting_team")
+  cardPacksEnabled Boolean  @default(false)
+  /** Scoring levers locked at setup. Off means that factor does not move
+   *  the team rating — and the CPU stops chasing it. Defaults keep the
+   *  full game for drafts started before these existed. */
+  chemistryEnabled Boolean  @default(true)
+  coachEnabled     Boolean  @default(true)
+  ageEnabled       Boolean  @default(true)
+  potentialEnabled Boolean  @default(true)
+  fitEnabled       Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  userTeam   Team?       @relation("UserTeam", fields: [userTeamId], references: [id])
+  teams      Team[]      @relation("DraftTeams")
+  coaches    Coach[]
+  picks      DraftPick[]
+  coachPicks CoachPick[]
+  cardPacks  CardPack[]
+}
+
+/** Coaches are generated per-draft too, for the same reason as Team. */
+model Coach {
+  id      Int    @id @default(autoincrement())
+  draftId Int
+  name    String
+  club    String
+  clubId  Int?
+  rating  Int
+
+  draft      Draft       @relation(fields: [draftId], references: [id])
+  coachPicks CoachPick[]
+
+  @@unique([draftId, name])
+}
+
+model CoachPick {
+  id         Int @id @default(autoincrement())
+  draftId    Int
+  pickNumber Int
+  teamId     Int
+  coachId    Int
+
+  draft Draft @relation(fields: [draftId], references: [id])
+  team  Team  @relation(fields: [teamId], references: [id])
+  coach Coach @relation(fields: [coachId], references: [id])
+
+  @@unique([draftId, pickNumber])
+  @@unique([draftId, coachId])
+  @@unique([draftId, teamId])
+}
+
+model DraftPick {
+  id         Int @id @default(autoincrement())
+  draftId    Int
+  pickNumber Int
+  round      Int
+  teamId     Int
+  playerId   Int
+  /** Formation slot id this player was drafted into (`CB1`, `ST`, ...), or
+   *  null for a bench pick. Chosen by the drafter, which is what makes a
+   *  multi-position player a real decision rather than an automatic one. */
+  slotId     String?
+
+  draft  Draft  @relation(fields: [draftId], references: [id])
+  team   Team   @relation(fields: [teamId], references: [id])
+  player Player @relation(fields: [playerId], references: [id])
+
+  @@unique([draftId, pickNumber])
+  @@unique([draftId, playerId])
+  // SQLite treats NULLs as distinct, so this stops two players landing in
+  // the same slot while leaving the bench (slotId null) unlimited.
+  @@unique([draftId, teamId, slotId])
+  @@index([draftId, teamId])
+}
+
+/** Opt-in "card packs" mechanic: trade in an already-drafted player for a
+ *  pack of 5 random same-position candidates (from the draft's selected
+ *  leagues, excluding anyone already drafted by anyone), pick one to swap
+ *  in. `candidateIds` is a comma-separated list of Player ids — deliberately
+ *  not a Player relation/join table, since these are just references into
+ *  the shared Player table, not draft-owned rows. Player ids referenced
+ *  here (tradedPlayerId, candidateIds, chosenPlayerId) are looked up
+ *  manually in application code rather than via a Prisma relation.
+ */
+model CardPack {
+  id             Int      @id @default(autoincrement())
+  draftId        Int
+  teamId         Int
+  round          Int
+  tradedPlayerId Int
+  candidateIds   String
+  chosenPlayerId Int?
+  createdAt      DateTime @default(now())
+
+  draft Draft @relation(fields: [draftId], references: [id])
+  team  Team  @relation(fields: [teamId], references: [id])
+
+  @@unique([draftId, tradedPlayerId])
+  @@index([draftId, teamId])
+}
+
+/**
+ * "Packs" mode — a standalone alternative to Draft mode. No leagues, no
+ * opponents: the user spends a fixed cash budget on packs (drawn from the
+ * ENTIRE Player table) to build the same 15-player + coach squad shape the
+ * Team Rating engine already expects, then picks a free coach once the
+ * squad is full. `coach*` fields are denormalized straight onto PackRun
+ * (a single free pick from the same real-world coach list Draft mode
+ * seeds per draft) rather than a relation, since there's no per-run coach
+ * pool to manage here.
+ */
+model PackRun {
+  id          Int      @id @default(autoincrement())
+  cash        Int      @default(10000)
+  status      String   @default("in_progress") // in_progress | complete
+  coachName   String?
+  coachClub   String?
+  coachClubId Int?
+  coachRating Int?
+  createdAt   DateTime @default(now())
+
+  players  PackPlayer[]
+  openings PackOpening[]
+}
+
+/**
+ * One purchased-and-revealed pack, awaiting the player's picks. Candidates
+ * (with their color/boost already rolled at reveal time, not re-rolled on
+ * selection) are stored as a JSON blob rather than a join table — they're
+ * ephemeral, gone once resolved. A PackRun should have at most one
+ * unresolved PackOpening at a time (buying another pack is blocked until
+ * this one's picks are made).
+ */
+model PackOpening {
+  id          Int      @id @default(autoincrement())
+  packRunId   Int
+  tier        String
+  candidates  String // JSON: { playerId, positionGroup, color, boost }[]
+  createdAt   DateTime @default(now())
+
+  packRun PackRun @relation(fields: [packRunId], references: [id])
+
+  @@index([packRunId])
+}
+
+/**
+ * A player kept from an opened pack. `playerId` references the real
+ * Player this card is based on (looked up manually, not a Prisma relation
+ * — same reasoning as CardPack above). `color`/`boost` make this an
+ * enhanced card when set — boost (1-7) is added to the real player's
+ * overall/potential/stats wherever this card's numbers are shown, capped
+ * at 99, computed on read rather than duplicated into stored columns.
+ */
+model PackPlayer {
+  id            Int      @id @default(autoincrement())
+  packRunId     Int
+  playerId      Int
+  positionGroup String
+  color         String? // null | "red" | "dark_blue" | "white" | "emerald"
+  boost         Int      @default(0)
+  acquiredAt    DateTime @default(now())
+
+  packRun PackRun @relation(fields: [packRunId], references: [id])
+
+  @@unique([packRunId, playerId])
+  @@index([packRunId])
+}
