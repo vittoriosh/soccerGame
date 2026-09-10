@@ -154,7 +154,12 @@ export function SlotPitch({
         const className = `group absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5 ${
           href ? "cursor-pointer" : ""
         }`;
-        const style = { left: `${slot.x}%`, top: `${slot.y}%` };
+        // Pull edge slots inward so badges, names and the highest striker
+        // remain visible inside the rounded, overflow-hidden pitch on phones.
+        const style = {
+          left: `${5 + slot.x * 0.9}%`,
+          top: `${5 + slot.y * 0.9}%`,
+        };
 
         return href ? (
           <Link key={slot.id} href={href} className={className} style={style}>

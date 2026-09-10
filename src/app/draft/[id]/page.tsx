@@ -644,7 +644,7 @@ export default async function DraftBoardPage({
           </div>
         </header>
 
-        <details className="group shrink-0 pb-3 lg:hidden">
+        <details open className="group shrink-0 pb-3 lg:hidden">
           <summary
             className={`${bebas.className} flex min-h-11 cursor-pointer list-none items-center justify-between border border-white/20 bg-black/45 px-3 text-base tracking-[0.14em] text-white/75 [&::-webkit-details-marker]:hidden`}
           >
@@ -653,8 +653,8 @@ export default async function DraftBoardPage({
               +
             </span>
           </summary>
-          <div className="max-h-[55dvh] overflow-y-auto pt-2">
-            <div className="mx-auto aspect-[3/4] w-full max-w-[260px]">
+          <div className="max-h-[52dvh] overflow-y-auto pt-2">
+            <div className="mx-auto aspect-[3/4] h-[36dvh] min-h-[220px] max-h-[300px]">
               <SlotPitch
                 compact
                 formation={me.formation}

@@ -16,15 +16,15 @@ export async function startDraft(formData: FormData) {
   const leagues = formData.getAll("leagues").map(String).filter(Boolean);
   if (leagues.length === 0) throw new Error("Pick at least one league");
 
-  // Total field size across every picked league. Default 20; min 2; max
-  // 20 × league count (2 leagues → 40, 3 → 60, …).
+  // Total field size across every picked league. Default 20 per league;
+  // min 2; max 20 × league count (2 leagues → 40, 3 → 60, …).
   const rawTotalTeams = Number.parseInt(String(formData.get("totalTeams")), 10);
   const minTotal = 2;
   const maxTotal = leagues.length * MAX_TEAMS_PER_LEAGUE;
   const totalTeams =
     Number.isFinite(rawTotalTeams) && rawTotalTeams > 0
       ? Math.max(minTotal, Math.min(maxTotal, rawTotalTeams))
-      : Math.min(20, maxTotal);
+      : maxTotal;
   const teamsPerLeague = distributeTeamsAcrossLeagues(totalTeams, leagues.length);
 
   const availableYearRows = await prisma.player.findMany({

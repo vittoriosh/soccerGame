@@ -136,7 +136,10 @@ export function DraftSetupWizard({
       const next = prev.includes(league)
         ? prev.filter((l) => l !== league)
         : [...prev, league];
-      setTotalTeams((n) => clampTeams(n, Math.max(1, next.length)));
+      const leagueCount = Math.max(1, next.length);
+      setTotalTeams(
+        clampTeams(leagueCount * teamsPerLeagueDefault, leagueCount),
+      );
       return next;
     });
     setError(null);
@@ -144,7 +147,10 @@ export function DraftSetupWizard({
 
   function selectTop5() {
     setSelected([...topLeagues]);
-    setTotalTeams((n) => clampTeams(n, Math.max(1, topLeagues.length)));
+    const leagueCount = Math.max(1, topLeagues.length);
+    setTotalTeams(
+      clampTeams(leagueCount * teamsPerLeagueDefault, leagueCount),
+    );
     setError(null);
   }
 
@@ -413,17 +419,6 @@ export function DraftSetupWizard({
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => {
-                  setRules(DEFAULT_SCORING_RULES);
-                  submit(DEFAULT_SCORING_RULES);
-                }}
-                className={`${bebas.className} border-2 border-white bg-white px-8 py-6 text-4xl tracking-[0.12em] text-black transition hover:bg-transparent hover:text-white disabled:opacity-60`}
-              >
-                {pending && classic ? "Starting…" : "Classic"}
-              </button>
-              <button
-                type="button"
-                disabled={pending}
                 onClick={() => setEditOpen(true)}
                 className={`${bebas.className} border-2 border-white/50 bg-black/55 px-8 py-5 text-3xl tracking-[0.12em] text-white transition hover:border-white disabled:opacity-50`}
               >
@@ -441,13 +436,13 @@ export function DraftSetupWizard({
 
       {error && <p className="mt-6 text-sm font-medium text-red-200">{error}</p>}
 
-      <div className="mt-8 flex flex-wrap items-center justify-center gap-3 sm:mt-10 sm:gap-4">
+      <div className="sticky right-0 bottom-0 left-0 z-30 mt-8 grid w-full grid-cols-2 gap-3 border-t border-white/15 bg-black/85 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:static sm:mt-10 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-center sm:gap-4 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
         {step !== "leagues" && (
           <button
             type="button"
             onClick={goBack}
             disabled={pending}
-            className={`${bebas.className} border-2 border-white/60 bg-black/55 px-7 py-4 text-2xl tracking-[0.12em] text-white transition hover:border-white disabled:opacity-50 sm:px-10 sm:py-5 sm:text-3xl`}
+            className={`${bebas.className} col-start-1 min-h-14 border-2 border-white/60 bg-black/55 px-4 py-3 text-2xl tracking-[0.12em] text-white transition hover:border-white disabled:opacity-50 sm:px-10 sm:py-5 sm:text-3xl`}
           >
             Back
           </button>
@@ -457,9 +452,23 @@ export function DraftSetupWizard({
           <button
             type="button"
             onClick={goNext}
-            className={`${bebas.className} border-2 border-white bg-white px-8 py-4 text-2xl tracking-[0.12em] text-black transition hover:bg-transparent hover:text-white sm:px-12 sm:py-5 sm:text-3xl`}
+            className={`${bebas.className} col-start-2 min-h-14 border-2 border-white bg-white px-4 py-3 text-2xl tracking-[0.12em] text-black transition hover:bg-transparent hover:text-white sm:px-12 sm:py-5 sm:text-3xl`}
           >
             Continue →
+          </button>
+        )}
+
+        {step === "rules" && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              setRules(DEFAULT_SCORING_RULES);
+              submit(DEFAULT_SCORING_RULES);
+            }}
+            className={`${bebas.className} col-start-2 min-h-14 border-2 border-white bg-white px-4 py-3 text-2xl tracking-[0.12em] text-black transition hover:bg-transparent hover:text-white disabled:opacity-60 sm:px-12 sm:py-5 sm:text-3xl`}
+          >
+            {pending && classic ? "Starting…" : "Classic"}
           </button>
         )}
       </div>
