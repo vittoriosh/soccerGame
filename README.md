@@ -43,3 +43,13 @@ DATABASE_URL=file:/var/lib/matchday-manager/game.db
 
 The database directory must exist and be writable by the application user.
 Back up the SQLite database before applying migrations.
+
+## Vercel
+
+Set `DATABASE_URL` in the Vercel project environment variables so installs and
+runtime share the same connection string.
+
+SQLite file databases do **not** work on Vercel’s serverless filesystem. For a
+hosted deploy, use a remote database (for example Postgres/Neon/Turso) and set
+`DATABASE_URL` to that connection string. `prisma generate` no longer requires
+the variable at install time, but the running app still does.
