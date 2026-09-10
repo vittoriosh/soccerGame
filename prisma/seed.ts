@@ -2,6 +2,7 @@ import "dotenv/config";
 import { createReadStream } from "node:fs";
 import path from "node:path";
 import { parse } from "csv-parse";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { primaryPositionGroup } from "../src/lib/positions";
 
@@ -10,7 +11,9 @@ if (!databaseUrl) {
   throw new Error("DATABASE_URL is required to seed. Set it to your Postgres connection string.");
 }
 
-const prisma = new PrismaClient({ datasourceUrl: databaseUrl });
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: databaseUrl }),
+});
 // Both files share the same column layout (player_id, fifa_version, ...) —
 // years are derived per-row from fifa_version, not hardcoded per file, so
 // adding another file here (e.g. a future edition) needs no other changes.

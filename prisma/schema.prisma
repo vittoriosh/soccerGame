@@ -4,6 +4,9 @@
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
+  // Avoid shipping the native Query Engine binary that Vercel often drops
+  // from custom output paths. Runtime uses @prisma/adapter-pg instead.
+  engineType = "client"
 }
 
 datasource db {
