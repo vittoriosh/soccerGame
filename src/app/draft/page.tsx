@@ -7,6 +7,8 @@ import {
 import { StadiumShell } from "@/components/stadium-shell";
 import { DraftSetupWizard } from "@/components/draft-setup-wizard";
 
+export const dynamic = "force-dynamic";
+
 export default async function LeaguePickerPage() {
   const [distinctLeagues, distinctYears] = await Promise.all([
     prisma.player.findMany({

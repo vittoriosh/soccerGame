@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { StadiumShell } from "@/components/stadium-shell";
 import { PickClubFlow } from "@/components/pick-club-flow";
 
+export const dynamic = "force-dynamic";
+
 export default async function PickTeamPage({
   params,
 }: {

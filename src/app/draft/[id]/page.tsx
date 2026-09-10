@@ -250,6 +250,8 @@ async function bestPossibleForUser(args: {
   };
 }
 
+export const dynamic = "force-dynamic";
+
 export default async function DraftBoardPage({
   params,
   searchParams,

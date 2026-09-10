@@ -13,6 +13,6 @@ export default defineConfig({
   datasource: {
     // Do not use env("DATABASE_URL") here — that throws during `prisma generate`
     // (postinstall / Vercel build) when the variable is not set yet.
-    url: process.env.DATABASE_URL ?? "file:./dev.db",
+    url: process.env.DATABASE_URL ?? "postgresql://postgres:postgres@localhost:5432/soccer_game",
   },
 });

@@ -8,6 +8,8 @@ import { cardTierBorderClass } from "@/lib/card-tier";
 import { getUnresolvedPacks, getTradeInsUsed, MAX_TRADE_INS } from "@/lib/card-packs";
 import { tradeIn, openPack } from "./actions";
 
+export const dynamic = "force-dynamic";
+
 export default async function CardPacksPage({
   params,
 }: {

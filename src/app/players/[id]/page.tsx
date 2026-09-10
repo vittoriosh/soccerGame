@@ -8,6 +8,8 @@ import { cardTierAccentBorderClass } from "@/lib/card-tier";
 import { StadiumShell } from "@/components/stadium-shell";
 import { bebas } from "@/lib/game-fonts";
 
+export const dynamic = "force-dynamic";
+
 function StatBar({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex items-center gap-3 text-sm">

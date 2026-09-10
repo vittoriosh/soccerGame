@@ -6,6 +6,8 @@ import { cardTierAccentBorderClass } from "@/lib/card-tier";
 import { StadiumShell } from "@/components/stadium-shell";
 import { bebas } from "@/lib/game-fonts";
 
+export const dynamic = "force-dynamic";
+
 const PAGE_SIZE = 20;
 
 function buildQueryString(params: Record<string, string | number | undefined>) {

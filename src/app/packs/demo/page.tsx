@@ -17,6 +17,8 @@ import {
 // priced) anywhere in real gameplay, just something to look at here. Beats
 // Diamond on both axes: more likely to roll enhanced at all, and when it
 // does, almost guaranteed to pull from the elite 90+ band.
+export const dynamic = "force-dynamic";
+
 const LEGENDARY_TIER: PackTierConfig = {
   key: "legendary",
   name: "Legendary Pack",

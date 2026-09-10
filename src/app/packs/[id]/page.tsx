@@ -27,6 +27,8 @@ import {
 } from "@/lib/packs";
 import { resolveOpening, resolveCoachOpening, skipOpening } from "./actions";
 
+export const dynamic = "force-dynamic";
+
 const CATEGORY_LABELS: Record<PositionGroup, string> = {
   FWD: "Attack",
   MID: "Midfield",
