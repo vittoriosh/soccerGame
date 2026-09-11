@@ -1,7 +1,7 @@
 import type { PositionGroup } from "./positions";
 import {
   DEFAULT_GAME_MODE,
-  normalizeGameMode,
+  formationModeFor,
   type GameMode,
 } from "./game-mode";
 
@@ -249,12 +249,12 @@ export const DEFAULT_FORMATION_KEY = "4-3-3";
 export const DEFAULT_SEVENS_FORMATION_KEY = "7s-2-3-1";
 
 export function formationsForMode(mode: string | null | undefined): Formation[] {
-  const normalized = normalizeGameMode(mode);
+  const normalized = formationModeFor(mode);
   return FORMATIONS.filter((formation) => formation.mode === normalized);
 }
 
 export function defaultFormationForMode(mode: string | null | undefined): string {
-  return normalizeGameMode(mode) === "sevens"
+  return formationModeFor(mode) === "sevens"
     ? DEFAULT_SEVENS_FORMATION_KEY
     : DEFAULT_FORMATION_KEY;
 }

@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { Prisma } from "@/generated/prisma/client";
 import { advanceDraft } from "@/lib/draft";
 import { shuffled } from "@/lib/league-data";
 
@@ -53,26 +54,30 @@ export async function rollPickOrder(formData: FormData) {
 
   const userTeamId = draft.userTeamId;
 
-  await prisma.$transaction(async (tx) => {
-    const teams = await tx.team.findMany({
-      where: { draftId },
-      orderBy: { id: "asc" },
-    });
-    const orders = shuffled(teams.map((t) => t.draftOrder));
+  const teams = await prisma.team.findMany({
+    where: { draftId },
+    orderBy: { id: "asc" },
+    select: { id: true },
+  });
+  const orders = shuffled(teams.map((_, i) => i + 1));
 
+  await prisma.$transaction(async (tx) => {
     // Unique (draftId, draftOrder) — park on negatives, then write finals.
-    for (let i = 0; i < teams.length; i++) {
-      await tx.team.update({
-        where: { id: teams[i].id },
-        data: { draftOrder: -(i + 1) },
-      });
-    }
-    for (let i = 0; i < teams.length; i++) {
-      await tx.team.update({
-        where: { id: teams[i].id },
-        data: { draftOrder: orders[i] },
-      });
-    }
+    // Both halves are single statements: updating row by row blew the 5s
+    // transaction budget once a field reached forty clubs.
+    await tx.$executeRaw`
+      UPDATE "Team" SET "draftOrder" = -"draftOrder" WHERE "draftId" = ${draftId}
+    `;
+    await tx.$executeRaw`
+      UPDATE "Team" SET "draftOrder" = CASE "id"
+      ${Prisma.join(
+        // Casts are required: a bare placeholder binds as text, which
+        // Postgres won't assign to an integer column.
+        teams.map((team, i) => Prisma.sql`WHEN ${team.id}::int THEN ${orders[i]}::int`),
+        " ",
+      )}
+      END WHERE "draftId" = ${draftId}
+    `;
 
     // Stay off the live board until the player has seen their slot — if
     // we flipped to in_progress here, the pick-team page would refresh

@@ -26,9 +26,7 @@ export function StadiumShell({
   return (
     <div
       className={`${barlow.className} relative flex min-h-dvh flex-1 flex-col text-white ${
-        fill
-          ? "h-dvh min-h-0 overflow-hidden"
-          : "overflow-x-hidden overflow-y-auto overscroll-y-contain"
+        fill ? "h-dvh min-h-0 overflow-hidden" : "overflow-x-hidden"
       }`}
     >
       <div
@@ -50,7 +48,7 @@ export function StadiumShell({
             : fill
               ? "min-h-0 flex-1 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6"
               : scrollable
-                ? "px-4 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-8 lg:px-10"
+                ? "items-center px-4 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-8 lg:px-10"
                 : ""
         }`}
       >

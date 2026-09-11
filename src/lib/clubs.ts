@@ -52,16 +52,17 @@ function squadStrength(avgOverall: number, maxOverall: number): number {
 }
 
 /**
- * The `count` strongest real clubs in a league for the draft's chosen
- * years — strongest rather than a random sample so a small field is still
- * a field of clubs you recognise. Falls back to including thin squads only
- * if a league doesn't have enough full ones.
+ * Every club a league can field for the chosen years, strongest first.
+ * `full` is the real supply — clubs with a squad you could actually put on
+ * a pitch — and `all` adds the thin ones, which only get used when a field
+ * is bigger than the full supply.
  */
-export async function realClubsForLeague(
+export type LeagueClubPool = { full: RealClub[]; all: RealClub[] };
+
+export async function clubPoolForLeague(
   league: string,
   years: number[],
-  count: number,
-): Promise<RealClub[]> {
+): Promise<LeagueClubPool> {
   const rows = await prisma.player.groupBy({
     by: ["club", "clubId"],
     where: { league, year: { in: years }, club: { not: "" } },
@@ -96,17 +97,34 @@ export async function realClubsForLeague(
     if (!bySlug.has(slug)) bySlug.set(slug, club);
   }
   const unique = Array.from(bySlug.values()).sort((a, b) => b.strength - a.strength);
-  const full = unique.filter((c) => c.size >= MIN_SQUAD_SIZE);
-  const pool = full.length >= count ? full : unique;
-
   const plShortNames = new Map(REAL_PL_TEAMS.map((t) => [t.name, t.shortName]));
-
-  return pool.slice(0, Math.max(1, count)).map((club) => ({
+  const toClub = (club: (typeof unique)[number]): RealClub => ({
     name: club.name,
     shortName: plShortNames.get(club.name) ?? deriveShortName(club.name),
     clubId: club.clubId,
     strength: club.strength,
-  }));
+  });
+
+  return {
+    full: unique.filter((c) => c.size >= MIN_SQUAD_SIZE).map(toClub),
+    all: unique.map(toClub),
+  };
+}
+
+/**
+ * The `count` strongest real clubs in a league — strongest rather than a
+ * random sample so a small field is still a field of clubs you recognise.
+ * Falls back to including thin squads only if a league doesn't have enough
+ * full ones.
+ */
+export async function realClubsForLeague(
+  league: string,
+  years: number[],
+  count: number,
+): Promise<RealClub[]> {
+  const pool = await clubPoolForLeague(league, years);
+  const source = pool.full.length >= count ? pool.full : pool.all;
+  return source.slice(0, Math.max(1, count));
 }
 
 /** Squad strengths run ~51 (bottom of a minor league) to ~83 (Arsenal). */
@@ -144,16 +162,47 @@ export async function coachPoolForLeague(
   league: string,
   years: number[],
   excludeCoachNames: Set<string>,
+  count: number = MAX_TEAMS_PER_LEAGUE,
 ): Promise<DraftableCoach[]> {
-  if (league === PREMIER_LEAGUE) return realPremierLeagueCoachPool();
+  // The Premier League's real managers come first and always; a field big
+  // enough to need more than twenty tops up with generated names, because
+  // the last round forces every club to hire someone.
+  const real = league === PREMIER_LEAGUE ? realPremierLeagueCoachPool() : [];
+  if (real.length >= count) return real;
 
-  const clubs = await realClubsForLeague(league, years, MAX_TEAMS_PER_LEAGUE);
-  const names = generateCoachNames(clubs.length, excludeCoachNames);
+  // One manager per club per season, so a wider year window is a deeper
+  // coach market the same way it's a deeper player pool. Seasons are
+  // interleaved rather than concatenated so the strongest clubs from every
+  // year reach the board, not all of one season before any of the next.
+  const seasons = await Promise.all(
+    years.map(async (year) => {
+      const pool = await clubPoolForLeague(league, [year]);
+      return pool.full.length > 0 ? pool.full : pool.all;
+    }),
+  );
+  const realClubNames = new Set(real.map((coach) => coach.club));
+  const hosts: RealClub[] = [];
+  for (let rank = 0; rank < Math.max(0, ...seasons.map((s) => s.length)); rank++) {
+    for (const season of seasons) {
+      const club = season[rank];
+      if (club && !realClubNames.has(club.name)) hosts.push(club);
+    }
+  }
+  if (hosts.length === 0) return real;
 
-  return clubs.map((club, i) => ({
-    name: names[i] ?? `${club.shortName} Manager`,
-    club: club.name,
-    clubId: club.clubId,
-    rating: coachRatingFor(club.strength),
-  }));
+  const taken = new Set([...excludeCoachNames, ...real.map((coach) => coach.name)]);
+  const need = count - real.length;
+  const names = generateCoachNames(need, taken);
+
+  const generated = Array.from({ length: need }, (_, i) => {
+    const club = hosts[i % hosts.length];
+    return {
+      name: names[i] ?? `${club.shortName} Manager ${i + 1}`,
+      club: club.name,
+      clubId: club.clubId,
+      rating: coachRatingFor(club.strength),
+    };
+  });
+
+  return [...real, ...generated];
 }

@@ -79,6 +79,68 @@ function ClubCrest({
   );
 }
 
+export type SeasonPool = {
+  leagueLabel: string;
+  years: number[];
+  yearOptions: number[];
+};
+
+/**
+ * A career season's pool isn't chosen, it's dealt: the division fixes the
+ * leagues and rolls the years. Same spin as the draft-order number, so the
+ * years land rather than just appearing.
+ */
+function SeasonPoolReveal({ pool }: { pool: SeasonPool }) {
+  const yearsKey = pool.years.join(",");
+  const optionsKey = pool.yearOptions.join(",");
+  const canSpin = pool.years.length > 0 && pool.yearOptions.length > 1;
+  const [display, setDisplay] = useState(pool.years);
+  const [spinning, setSpinning] = useState(canSpin);
+
+  useEffect(() => {
+    if (!canSpin) return;
+    const target = yearsKey.split(",").map(Number);
+    const options = optionsKey.split(",").map(Number);
+    const spin = window.setInterval(() => {
+      setDisplay(target.map(() => options[Math.floor(Math.random() * options.length)]));
+    }, 80);
+    const land = window.setTimeout(() => {
+      window.clearInterval(spin);
+      setDisplay(target);
+      setSpinning(false);
+    }, 1500);
+    return () => {
+      window.clearInterval(spin);
+      window.clearTimeout(land);
+    };
+  }, [canSpin, yearsKey, optionsKey]);
+
+  return (
+    <div className="mx-auto mt-6 w-full max-w-xl border-2 border-emerald-300/40 bg-emerald-400/5 px-5 py-4">
+      <p className={`${bebas.className} text-lg tracking-[0.2em] text-emerald-200`}>
+        {pool.leagueLabel}
+      </p>
+      <div className="mt-3 flex items-center justify-center gap-2">
+        {display.map((year, i) => (
+          <span
+            key={i}
+            className={`${bebas.className} flex h-16 min-w-24 items-center justify-center border-2 border-white bg-black/55 px-3 text-4xl text-white ${
+              spinning ? "pick-roll-spin" : ""
+            }`}
+          >
+            {year}
+          </span>
+        ))}
+      </div>
+      <p className={`${barlow.className} mt-3 text-xs tracking-wide text-white/55`}>
+        {spinning
+          ? "Rolling this season's player years…"
+          : `Only ${display.length === 1 ? "this year's" : "these years'"} cards are on the board.`}
+      </p>
+    </div>
+  );
+}
+
 export function PickClubFlow({
   draftId,
   clubs,
@@ -86,6 +148,7 @@ export function PickClubFlow({
   revealedPick,
   teamCount,
   seasonLabel,
+  seasonPool,
 }: {
   draftId: number;
   clubs: ClubOption[];
@@ -93,6 +156,7 @@ export function PickClubFlow({
   revealedPick: number | null;
   teamCount: number;
   seasonLabel?: string | null;
+  seasonPool?: SeasonPool | null;
 }) {
   const [pending, startTransition] = useTransition();
   const [rolling, setRolling] = useState(false);
@@ -170,7 +234,7 @@ export function PickClubFlow({
     );
 
     return (
-      <div className="flex w-full max-w-xl flex-col items-center text-center">
+      <div className="mx-auto flex min-h-[70dvh] w-full max-w-xl flex-col items-center justify-center text-center">
         <div className="home-fade-in w-full">
           <h1
             className={`${bebas.className} flex items-center justify-center text-4xl tracking-wide text-white sm:text-6xl`}
@@ -181,6 +245,11 @@ export function PickClubFlow({
           {seasonLabel && (
             <p className={`${bebas.className} mt-2 text-xl tracking-[0.2em] text-emerald-300`}>
               {seasonLabel}
+            </p>
+          )}
+          {seasonPool && (
+            <p className={`${barlow.className} mt-2 text-sm text-white/55`}>
+              {seasonPool.leagueLabel} · {seasonPool.years.join(", ")}
             </p>
           )}
 
@@ -231,7 +300,7 @@ export function PickClubFlow({
   }
 
   return (
-    <div className="flex w-full max-w-5xl flex-col items-center text-center">
+    <div className="mx-auto flex w-full max-w-5xl flex-col items-center pb-[max(2rem,env(safe-area-inset-bottom))] text-center">
       <div className="home-fade-in w-full">
         <h1
           className={`${bebas.className} flex items-center justify-center text-4xl tracking-wide text-white sm:text-6xl`}
@@ -244,6 +313,7 @@ export function PickClubFlow({
             {seasonLabel}
           </p>
         )}
+        {seasonPool && <SeasonPoolReveal pool={seasonPool} />}
 
         {Array.from(byLeague.entries()).map(([league, leagueClubs]) => (
           <div key={league} className="mt-8">
@@ -252,7 +322,7 @@ export function PickClubFlow({
                 {league}
               </h2>
             )}
-            <div className="grid max-h-[58vh] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-4 md:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-5">
               {leagueClubs.map((club) => (
                 <button
                   key={club.id}

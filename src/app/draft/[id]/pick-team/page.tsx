@@ -2,6 +2,9 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { StadiumShell } from "@/components/stadium-shell";
 import { PickClubFlow } from "@/components/pick-club-flow";
+import { availablePlayerYears } from "@/lib/create-draft";
+import { divisionLeagueLabel } from "@/lib/season-divisions";
+import { parseDraftYears } from "@/lib/draft";
 
 export const dynamic = "force-dynamic";
 
@@ -45,8 +48,19 @@ export default async function PickTeamPage({
       ? (teams.find((t) => t.id === draft.userTeamId)?.draftOrder ?? null)
       : null;
 
+  // Career doesn't let you choose the pool — the division sets the leagues
+  // and rolls the years — so the pool gets revealed here instead.
+  const seasonPool =
+    draft.gameMode === "career"
+      ? {
+          leagueLabel: divisionLeagueLabel(draft.division),
+          years: parseDraftYears(draft.years),
+          yearOptions: await availablePlayerYears(),
+        }
+      : null;
+
   return (
-    <StadiumShell align="center">
+    <StadiumShell scrollable>
       <PickClubFlow
         draftId={draftId}
         clubs={clubs}
@@ -58,6 +72,7 @@ export default async function PickTeamPage({
             ? `Season ${draft.seasonNumber} · Division ${draft.division}`
             : null
         }
+        seasonPool={seasonPool}
       />
     </StadiumShell>
   );

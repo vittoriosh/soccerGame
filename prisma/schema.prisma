@@ -154,10 +154,13 @@ model Draft {
   years            String   @default("2026")
   /** Chosen at setup and locked for the whole draft — see formations.ts. */
   formation        String   @default("4-3-3")
-  /** classic = 11 starters + 4 subs; sevens = 7 starters + 2 subs. */
+  /** classic = 11 starters + 4 subs; sevens = 7 starters + 2 subs;
+   *  career = 7s with the division ladder always on, where the division
+   *  (not the player) decides the leagues, years and field size. */
   gameMode         String   @default("classic")
-  /** Optional 7s career ladder. New careers begin in Division 5 and each
-   *  completed draft can create exactly one following season. */
+  /** The 7s career ladder — opt-in for `sevens`, always on for `career`.
+   *  New careers begin in Division 5 and each completed draft can create
+   *  exactly one following season. */
   divisionsEnabled Boolean  @default(false)
   division         Int      @default(5)
   seasonNumber     Int      @default(1)

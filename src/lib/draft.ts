@@ -10,7 +10,7 @@ import {
   roundsForRules,
   scoringRulesFromDraft,
 } from "@/lib/scoring-rules";
-import { normalizeGameMode } from "@/lib/game-mode";
+import { normalizeGameMode, supportsDivisions } from "@/lib/game-mode";
 import {
   divisionDifficulty,
   type DivisionDifficultyProfile,
@@ -181,7 +181,10 @@ export async function excludeDrafted<T extends { id: number }>(
   excludeIds: Set<number>,
   take: number,
 ): Promise<T[]> {
-  let fetchTake = Math.max(take * 20, CANDIDATE_FETCH_BUFFER);
+  let fetchTake = Math.min(
+    CANDIDATE_FETCH_CAP,
+    Math.max(take + excludeIds.size + 80, CANDIDATE_FETCH_BUFFER),
+  );
   while (true) {
     const rows = await fetch(fetchTake);
     const filtered = rows.filter((r) => !excludeIds.has(r.id));
@@ -351,7 +354,7 @@ export async function advanceDraft(draftId: number) {
   const gameMode = normalizeGameMode(draft.gameMode);
   const difficulty = divisionDifficulty(
     draft.division,
-    gameMode === "sevens" && draft.divisionsEnabled,
+    supportsDivisions(gameMode) && draft.divisionsEnabled,
   );
   const benchPicks = benchPicksForMode(gameMode);
   const rounds = roundsForRules(rules, gameMode);
@@ -429,22 +432,30 @@ export async function advanceDraft(draftId: number) {
     });
   }
 
-  // Four small boards, fetched once. The CPU loop stays in memory after this.
+  // Fetch enough UNDRAFTED players for this CPU window. A two-league field
+  // can already have the top 80 of a group gone by the user's 5th pick —
+  // `take: boardFetch` then filtering drafted returns an empty board and
+  // freezes the draft.
+  const remainingPicks = Math.max(0, totalPicks - draft.currentPick + 1);
+  const boardTake = Math.max(
+    difficulty.boardSize,
+    Math.min(400, remainingPicks + difficulty.boardFetch),
+  );
   const boards = new Map<PositionGroup, Candidate[]>();
   await Promise.all(
     POSITION_GROUPS.map(async (group) => {
-      const rows = await prisma.player.findMany({
-        where: { positionGroup: group, league: { in: leagues }, year: { in: years } },
-        select: CANDIDATE_SELECT,
-        orderBy: { overall: "desc" },
-        take: difficulty.boardFetch,
-      });
-      boards.set(
-        group,
-        rows
-          .filter((candidate) => !draftedPlayerIds.has(candidate.id))
-          .slice(0, difficulty.boardSize),
+      const live = await excludeDrafted(
+        (take) =>
+          prisma.player.findMany({
+            where: { positionGroup: group, league: { in: leagues }, year: { in: years } },
+            select: CANDIDATE_SELECT,
+            orderBy: { overall: "desc" },
+            take,
+          }),
+        draftedPlayerIds,
+        boardTake,
       );
+      boards.set(group, live);
     }),
   );
   function boardFor(group: PositionGroup): Candidate[] {
@@ -605,11 +616,14 @@ export async function advanceDraft(draftId: number) {
         // draft) — fall back to the best body available so the turn isn't
         // silently skipped.
         if (!best) {
-          for (const slot of state.openSlots) {
-            const board = boardFor(slot.group);
-            if (board.length > 0) {
-              best = { surplus: 0, candidate: board[0], slot };
-              break;
+          outer: for (const slot of state.openSlots) {
+            for (const group of POSITION_GROUPS) {
+              const board = boardFor(group);
+              for (const candidate of board) {
+                if (valueInSlot(candidate, slot) === null) continue;
+                best = { surplus: 0, candidate, slot };
+                break outer;
+              }
             }
           }
         }

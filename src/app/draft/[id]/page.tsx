@@ -28,7 +28,7 @@ import {
   scoringRulesFromDraft,
   type ScoringRules,
 } from "@/lib/scoring-rules";
-import { gameModeConfig } from "@/lib/game-mode";
+import { gameModeConfig, supportsDivisions } from "@/lib/game-mode";
 import { seasonOutcome } from "@/lib/season-divisions";
 import { makePick, makeCoachPick } from "./actions";
 
@@ -344,7 +344,7 @@ export default async function DraftBoardPage({
 
     const myRank = leaderboard.findIndex((t) => t.team.id === draft.userTeamId) + 1;
     const divisionOutcome =
-      draft.gameMode === "sevens" && draft.divisionsEnabled
+      supportsDivisions(draft.gameMode) && draft.divisionsEnabled
         ? seasonOutcome(myRank, leaderboard.length, draft.division)
         : null;
 
@@ -582,7 +582,7 @@ export default async function DraftBoardPage({
             <span
               className={`${bebas.className} hidden truncate text-lg tracking-[0.2em] text-white/40 sm:inline`}
             >
-              {draft.divisionsEnabled && draft.gameMode === "sevens"
+              {draft.divisionsEnabled && supportsDivisions(draft.gameMode)
                 ? `Division ${draft.division} · Season ${draft.seasonNumber}`
                 : me.formation.name}
             </span>

@@ -1,7 +1,12 @@
+import { PREMIER_LEAGUE, TOP_5_LEAGUES } from "./league-data";
+
 export const MIN_DIVISION = 1;
 export const MAX_DIVISION = 10;
 export const STARTING_DIVISION = 5;
 export const SEASON_BAND_SHARE = 0.2;
+
+const LA_LIGA = "La Liga";
+const SERIE_A = "Serie A";
 
 export type SeasonMovement = "promoted" | "relegated" | "held";
 
@@ -112,4 +117,75 @@ export function divisionDifficulty(
 ): DivisionDifficultyProfile {
   const normalized = enabled ? clampDivision(division) : STARTING_DIVISION;
   return { division: normalized, ...DIFFICULTY[normalized] };
+}
+
+/**
+ * What a career division actually is: the leagues on the board, how many
+ * player-card years get rolled into the pool, and how big the field is.
+ * Climbing widens all three at once, so Division 1 is a five-league,
+ * three-year, forty-club scramble and Division 10 is one league, one year,
+ * eight clubs.
+ */
+export type DivisionScope = {
+  division: number;
+  leagues: string[];
+  yearCount: number;
+  teamCount: number;
+};
+
+/**
+ * Year counts aren't only flavour — a division has to be able to field its
+ * clubs. Premier League + La Liga can only ever supply 40 real clubs from a
+ * single season, so the divisions that want 40 or 50 buy their headroom
+ * with an extra season rather than a thinner field. Years never decrease on
+ * the way up. `scripts/club-supply.ts` proves the floors.
+ */
+const SCOPE: Record<number, Omit<DivisionScope, "division">> = {
+  1: { leagues: TOP_5_LEAGUES, yearCount: 3, teamCount: 100 },
+  2: { leagues: TOP_5_LEAGUES, yearCount: 3, teamCount: 80 },
+  3: { leagues: [PREMIER_LEAGUE, LA_LIGA, SERIE_A], yearCount: 3, teamCount: 65 },
+  // Two leagues across three seasons top out near 55 real clubs, and three
+  // seasons is the cap, so Division 4 stops short of 50 rather than field
+  // youth sides. Serie A is Division 3's step up, not this one's.
+  4: { leagues: [PREMIER_LEAGUE, LA_LIGA], yearCount: 3, teamCount: 45 },
+  5: { leagues: [PREMIER_LEAGUE, LA_LIGA], yearCount: 2, teamCount: 40 },
+  6: { leagues: [PREMIER_LEAGUE, LA_LIGA], yearCount: 2, teamCount: 30 },
+  7: { leagues: [PREMIER_LEAGUE], yearCount: 2, teamCount: 20 },
+  8: { leagues: [PREMIER_LEAGUE], yearCount: 1, teamCount: 16 },
+  9: { leagues: [PREMIER_LEAGUE], yearCount: 1, teamCount: 12 },
+  10: { leagues: [PREMIER_LEAGUE], yearCount: 1, teamCount: 10 },
+};
+
+export function divisionScope(division: number): DivisionScope {
+  const normalized = clampDivision(division);
+  const scope = SCOPE[normalized];
+  return {
+    division: normalized,
+    leagues: [...scope.leagues],
+    yearCount: scope.yearCount,
+    teamCount: scope.teamCount,
+  };
+}
+
+export function divisionLeagueLabel(division: number): string {
+  const { leagues } = divisionScope(division);
+  return leagues.length === TOP_5_LEAGUES.length ? "Top 5 leagues" : leagues.join(" + ");
+}
+
+export function divisionScopeLabel(division: number): string {
+  const scope = divisionScope(division);
+  const years = `${scope.yearCount} random year${scope.yearCount === 1 ? "" : "s"}`;
+  return `${divisionLeagueLabel(division)} · ${years} · ${scope.teamCount} clubs`;
+}
+
+/** Years are rolled, not chosen — that reveal is part of the season start. */
+export function rollDivisionYears(division: number, availableYears: number[]): number[] {
+  const { yearCount } = divisionScope(division);
+  if (availableYears.length === 0) return [];
+  const pool = [...availableYears];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, Math.min(yearCount, pool.length)).sort((a, b) => b - a);
 }

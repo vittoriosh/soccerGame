@@ -18,7 +18,12 @@ import { formationsForMode } from "@/lib/formations";
 import { shuffled } from "@/lib/league-data";
 import { scoringRulesFromDraft } from "@/lib/scoring-rules";
 import { evaluateSquad } from "@/lib/squad-evaluation";
-import { seasonOutcome } from "@/lib/season-divisions";
+import {
+  divisionScope,
+  rollDivisionYears,
+  seasonOutcome,
+} from "@/lib/season-divisions";
+import { availablePlayerYears, createDraft, type KeptClub } from "@/lib/create-draft";
 
 export async function makePick(formData: FormData) {
   const draftId = Number.parseInt(String(formData.get("draftId")), 10);
@@ -172,12 +177,9 @@ export async function makeCoachPick(formData: FormData) {
   revalidatePath(`/draft/${draftId}`);
 }
 
-export async function startNextSeason(formData: FormData) {
-  const previousDraftId = Number.parseInt(String(formData.get("draftId")), 10);
-  if (!previousDraftId) throw new Error("Missing draftId");
-
-  const previous = await prisma.draft.findUnique({
-    where: { id: previousDraftId },
+function loadSeason(id: number) {
+  return prisma.draft.findUnique({
+    where: { id },
     include: {
       userTeam: true,
       teams: { orderBy: { draftOrder: "asc" } },
@@ -185,10 +187,135 @@ export async function startNextSeason(formData: FormData) {
       nextSeason: { select: { id: true } },
     },
   });
+}
+
+type FinishedSeason = NonNullable<Awaited<ReturnType<typeof loadSeason>>>;
+
+/** Same competition, fresh draft — used by the opt-in 7s ladder. */
+async function cloneSevensSeason(args: {
+  previous: FinishedSeason;
+  nextDivision: number;
+}): Promise<number> {
+  const { previous, nextDivision } = args;
+  const formations = formationsForMode("sevens");
+
+  return prisma.$transaction(
+    async (tx) => {
+      const nextDraft = await tx.draft.create({
+        data: {
+          leagues: previous.leagues,
+          years: previous.years,
+          formation: previous.formation,
+          gameMode: "sevens",
+          divisionsEnabled: true,
+          division: nextDivision,
+          seasonNumber: previous.seasonNumber + 1,
+          previousSeasonDraftId: previous.id,
+          cardPacksEnabled: previous.cardPacksEnabled,
+          chemistryEnabled: previous.chemistryEnabled,
+          coachEnabled: previous.coachEnabled,
+          ageEnabled: previous.ageEnabled,
+          potentialEnabled: previous.potentialEnabled,
+          fitEnabled: previous.fitEnabled,
+        },
+      });
+
+      await tx.team.createMany({
+        data: previous.teams.map((team) => ({
+          draftId: nextDraft.id,
+          league: team.league,
+          name: team.name,
+          shortName: team.shortName,
+          slug: team.slug,
+          clubId: team.clubId,
+          draftOrder: team.draftOrder,
+          formation:
+            team.id === previous.userTeamId
+              ? previous.formation
+              : shuffled(formations)[0].key,
+        })),
+      });
+
+      if (previous.coaches.length > 0) {
+        await tx.coach.createMany({
+          data: previous.coaches.map((coach) => ({
+            draftId: nextDraft.id,
+            name: coach.name,
+            club: coach.club,
+            clubId: coach.clubId,
+            rating: coach.rating,
+          })),
+        });
+      }
+
+      const carried = await tx.team.findFirst({
+        where: { draftId: nextDraft.id, slug: previous.userTeam!.slug },
+        select: { id: true },
+      });
+      if (!carried) throw new Error("Could not carry your club into the next season");
+
+      await tx.draft.update({
+        where: { id: nextDraft.id },
+        data: { userTeamId: carried.id, status: "rolling_pick" },
+      });
+      return nextDraft.id;
+    },
+    { timeout: 20000 },
+  );
+}
+
+/** A brand new field drawn from the division you've just earned. */
+async function createCareerSeason(args: {
+  previous: FinishedSeason;
+  rules: ReturnType<typeof scoringRulesFromDraft>;
+  nextDivision: number;
+  keepClub: KeptClub;
+}): Promise<number> {
+  const { previous, rules, nextDivision, keepClub } = args;
+  const scope = divisionScope(nextDivision);
+
+  const nextDraftId = await createDraft({
+    leagues: scope.leagues,
+    years: rollDivisionYears(nextDivision, await availablePlayerYears()),
+    totalTeams: scope.teamCount,
+    formation: previous.formation,
+    gameMode: "career",
+    rules,
+    divisionsEnabled: true,
+    division: nextDivision,
+    seasonNumber: previous.seasonNumber + 1,
+    previousSeasonDraftId: previous.id,
+    cardPacksEnabled: previous.cardPacksEnabled,
+    keepClub,
+  });
+
+  const field = await prisma.team.findMany({
+    where: { draftId: nextDraftId },
+    select: { id: true, clubId: true, name: true },
+  });
+  const carried =
+    field.find((team) =>
+      keepClub.clubId != null ? team.clubId === keepClub.clubId : team.name === keepClub.name,
+    ) ?? field.find((team) => team.name === keepClub.name);
+  if (!carried) throw new Error("Could not carry your club into the next season");
+
+  await prisma.draft.update({
+    where: { id: nextDraftId },
+    data: { userTeamId: carried.id, status: "rolling_pick" },
+  });
+
+  return nextDraftId;
+}
+
+export async function startNextSeason(formData: FormData) {
+  const previousDraftId = Number.parseInt(String(formData.get("draftId")), 10);
+  if (!previousDraftId) throw new Error("Missing draftId");
+
+  const previous = await loadSeason(previousDraftId);
   if (!previous) throw new Error("Season not found");
   if (
     previous.status !== "complete" ||
-    previous.gameMode !== "sevens" ||
+    (previous.gameMode !== "sevens" && previous.gameMode !== "career") ||
     !previous.divisionsEnabled ||
     !previous.userTeamId ||
     !previous.userTeam
@@ -246,66 +373,27 @@ export async function startNextSeason(formData: FormData) {
   if (rank < 1) throw new Error("Could not rank the completed season");
   const outcome = seasonOutcome(rank, previous.teams.length, previous.division);
 
+  const userTeam = previous.userTeam;
+
   let nextDraftId: number;
   try {
-    nextDraftId = await prisma.$transaction(async (tx) => {
-      const nextDraft = await tx.draft.create({
-        data: {
-          leagues: previous.leagues,
-          years: previous.years,
-          formation: previous.formation,
-          gameMode: "sevens",
-          divisionsEnabled: true,
-          division: outcome.nextDivision,
-          seasonNumber: previous.seasonNumber + 1,
-          previousSeasonDraftId: previous.id,
-          cardPacksEnabled: previous.cardPacksEnabled,
-          chemistryEnabled: previous.chemistryEnabled,
-          coachEnabled: previous.coachEnabled,
-          ageEnabled: previous.ageEnabled,
-          potentialEnabled: previous.potentialEnabled,
-          fitEnabled: previous.fitEnabled,
-        },
-      });
-
-      const formations = formationsForMode("sevens");
-      let nextUserTeamId: number | null = null;
-      for (const team of previous.teams) {
-        const isUser = team.id === previous.userTeamId;
-        const nextTeam = await tx.team.create({
-          data: {
-            draftId: nextDraft.id,
-            league: team.league,
-            name: team.name,
-            shortName: team.shortName,
-            slug: team.slug,
-            clubId: team.clubId,
-            draftOrder: team.draftOrder,
-            formation: isUser ? previous.formation : shuffled(formations)[0].key,
-          },
-        });
-        if (isUser) nextUserTeamId = nextTeam.id;
-      }
-      if (!nextUserTeamId) throw new Error("Could not carry your club into the next season");
-
-      if (previous.coaches.length > 0) {
-        await tx.coach.createMany({
-          data: previous.coaches.map((coach) => ({
-            draftId: nextDraft.id,
-            name: coach.name,
-            club: coach.club,
-            clubId: coach.clubId,
-            rating: coach.rating,
-          })),
-        });
-      }
-
-      await tx.draft.update({
-        where: { id: nextDraft.id },
-        data: { userTeamId: nextUserTeamId, status: "rolling_pick" },
-      });
-      return nextDraft.id;
-    });
+    // Career rebuilds the whole field, because the new division changes the
+    // leagues, the years and the field size. The opt-in 7s ladder keeps the
+    // exact same competition and just re-runs the draft.
+    nextDraftId =
+      previous.gameMode === "career"
+        ? await createCareerSeason({
+            previous,
+            rules,
+            nextDivision: outcome.nextDivision,
+            keepClub: {
+              league: userTeam.league,
+              name: userTeam.name,
+              shortName: userTeam.shortName,
+              clubId: userTeam.clubId,
+            },
+          })
+        : await cloneSevensSeason({ previous, nextDivision: outcome.nextDivision });
   } catch (error) {
     const isDuplicate =
       typeof error === "object" &&
