@@ -14,6 +14,30 @@ function modeLabel(mode: string): string {
   return CAREER_MODES.find((entry) => entry.key === mode)?.label ?? "Career 7s";
 }
 
+function TrophyBadges({ divisions }: { divisions: number[] }) {
+  const counts = new Map<number, number>();
+  for (const division of divisions) {
+    counts.set(division, (counts.get(division) ?? 0) + 1);
+  }
+  if (counts.size === 0) return null;
+
+  return (
+    <span className="mt-1 flex flex-wrap gap-1">
+      {[...counts.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([division, count]) => (
+          <span
+            key={division}
+            className={`${bebas.className} border border-amber-200/25 bg-amber-300/10 px-1.5 py-0.5 text-[11px] tracking-wide text-amber-200`}
+          >
+            🏆 D{division}
+            {count > 1 ? ` ×${count}` : ""}
+          </span>
+        ))}
+    </span>
+  );
+}
+
 export default async function LeaderboardPage({
   searchParams,
 }: {
@@ -44,6 +68,13 @@ export default async function LeaderboardPage({
     const career = byCareer.get(result.careerKey) ?? [];
     career.push(result);
     byCareer.set(result.careerKey, career);
+  }
+  const trophiesByCareer = new Map<string, number[]>();
+  for (const result of allResults) {
+    if (result.fieldRank !== 1) continue;
+    const trophies = trophiesByCareer.get(result.careerKey) ?? [];
+    trophies.push(result.division);
+    trophiesByCareer.set(result.careerKey, trophies);
   }
   const divisionOne = [...byCareer.values()]
     .map((results) => {
@@ -152,6 +183,7 @@ export default async function LeaderboardPage({
                     <span className="block truncate text-xs text-white/40 sm:hidden">
                       {row.teamName} · {row.fieldRank}/{row.fieldSize}
                     </span>
+                    <TrophyBadges divisions={trophiesByCareer.get(row.careerKey) ?? []} />
                   </span>
                   <span className="hidden truncate text-sm text-white/65 sm:block">{row.teamName}</span>
                   <span className="hidden text-center text-sm text-white/65 sm:block">
@@ -186,6 +218,7 @@ export default async function LeaderboardPage({
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold">{row.username}</span>
                     <span className="block truncate text-xs text-white/40 sm:hidden">{row.teamName}</span>
+                    <TrophyBadges divisions={trophiesByCareer.get(row.careerKey) ?? []} />
                   </span>
                   <span className="hidden truncate text-sm text-white/65 sm:block">{row.teamName}</span>
                   <span className="hidden text-right text-sm text-white/65 sm:block">

@@ -347,6 +347,23 @@ export default async function DraftBoardPage({
       supportsDivisions(draft.gameMode) && draft.divisionsEnabled
         ? seasonOutcome(myRank, leaderboard.length, draft.division)
         : null;
+    const titleResults = draft.careerKey
+      ? await prisma.careerResult.findMany({
+          where: { careerKey: draft.careerKey, fieldRank: 1 },
+          select: { draftId: true, division: true },
+          orderBy: { seasonNumber: "asc" },
+        })
+      : [];
+    // Completion records normally exist before this page renders. Include
+    // the current title defensively if an older deployment completed it.
+    const titleDivisions = titleResults.map((title) => title.division);
+    if (
+      divisionOutcome &&
+      myRank === 1 &&
+      !titleResults.some((title) => title.draftId === draftId)
+    ) {
+      titleDivisions.push(draft.division);
+    }
 
     const completeLines = POSITION_GROUPS.map((group) => {
       const yours = unified.lines.find((l) => l.group === group)?.effectiveAvg ?? 0;
@@ -422,6 +439,7 @@ export default async function DraftBoardPage({
               ? `/leaderboard?mode=${draft.gameMode}&division=${draft.division}&returnTo=${encodeURIComponent(`/draft/${draftId}`)}`
               : undefined
           }
+          titleDivisions={titleDivisions}
           season={
             divisionOutcome
               ? {

@@ -59,6 +59,14 @@ function diffTone(value: number) {
   return "text-white/70";
 }
 
+function trophyCounts(divisions: number[]) {
+  const counts = new Map<number, number>();
+  for (const division of divisions) {
+    counts.set(division, (counts.get(division) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort(([a], [b]) => a - b);
+}
+
 export function DraftCompleteFlow({
   clubName,
   formationKey,
@@ -75,6 +83,7 @@ export function DraftCompleteFlow({
   rules = DEFAULT_SCORING_RULES,
   draftId,
   leaderboardHref,
+  titleDivisions = [],
   season = null,
 }: {
   clubName: string;
@@ -92,6 +101,7 @@ export function DraftCompleteFlow({
   rules?: ScoringRules;
   draftId: number;
   leaderboardHref?: string;
+  titleDivisions?: number[];
   season?: {
     number: number;
     division: number;
@@ -109,6 +119,7 @@ export function DraftCompleteFlow({
   const formation: Formation = getFormation(formationKey);
   const occupantMap = new Map(occupants.map((o) => [o.slotId, o.player]));
   const fieldSize = teams.length;
+  const trophies = trophyCounts(titleDivisions);
 
   const lineByGroup = new Map(lines.map((l) => [l.group, l]));
   const currentLineMeta = LINE_REVEAL[lineIndex] ?? LINE_REVEAL[0];
@@ -358,6 +369,19 @@ export function DraftCompleteFlow({
               #{rank}
               <span className="text-2xl text-white/40"> / {fieldSize}</span>
             </p>
+            {season && rank === 1 && (
+              <div className="division-title-enter mx-auto mt-6" role="status">
+                <div className="division-trophy-glow relative mx-auto flex h-28 w-28 items-center justify-center rounded-full border-2 border-amber-200/70 bg-amber-300/10">
+                  <span className="division-trophy-pop text-7xl" aria-hidden>
+                    🏆
+                  </span>
+                </div>
+                <p className={`${bebas.className} mt-3 text-4xl tracking-wide text-amber-200`}>
+                  Division {season.division} Champions
+                </p>
+                <p className="mt-1 text-sm text-white/55">Trophy added to your career cabinet</p>
+              </div>
+            )}
             {season && (
               <div className="mx-auto mt-5 max-w-md">
                 <p
@@ -403,6 +427,25 @@ export function DraftCompleteFlow({
               </div>
               )}
             </div>
+
+            {season && trophies.length > 0 && (
+              <div className="mx-auto mt-6 w-full max-w-md border border-amber-200/30 bg-amber-300/5 px-4 py-4">
+                <p className={`${bebas.className} text-lg tracking-[0.2em] text-amber-200/80`}>
+                  Trophy Cabinet
+                </p>
+                <div className="mt-3 flex flex-wrap justify-center gap-2">
+                  {trophies.map(([division, count]) => (
+                    <span
+                      key={division}
+                      className={`${bebas.className} border border-amber-200/35 bg-black/35 px-3 py-2 text-lg tracking-wide text-amber-100`}
+                    >
+                      🏆 Division {division}
+                      {count > 1 ? ` ×${count}` : ""}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="mx-auto mt-8 w-full max-w-md text-left">
               <p
