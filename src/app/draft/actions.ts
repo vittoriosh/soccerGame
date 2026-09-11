@@ -9,7 +9,12 @@ import {
   slugify,
 } from "@/lib/league-data";
 import { coachPoolForLeague, realClubsForLeague } from "@/lib/clubs";
-import { FORMATIONS, DEFAULT_FORMATION_KEY, getFormation } from "@/lib/formations";
+import {
+  defaultFormationForMode,
+  formationsForMode,
+  getFormation,
+} from "@/lib/formations";
+import { normalizeGameMode } from "@/lib/game-mode";
 import { scoringRulesFromForm } from "@/lib/scoring-rules";
 
 export async function startDraft(formData: FormData) {
@@ -51,7 +56,15 @@ export async function startDraft(formData: FormData) {
 
   // Locked for the rest of the draft — every pick is judged against these
   // eleven roles, so it can't be changed once players are off the board.
-  const formation = getFormation(String(formData.get("formation") ?? DEFAULT_FORMATION_KEY)).key;
+  const gameMode = normalizeGameMode(String(formData.get("gameMode") ?? ""));
+  const modeFormations = formationsForMode(gameMode);
+  const requestedFormation = getFormation(
+    String(formData.get("formation") ?? defaultFormationForMode(gameMode)),
+  );
+  const formation =
+    requestedFormation.mode === gameMode
+      ? requestedFormation.key
+      : defaultFormationForMode(gameMode);
   const rules = scoringRulesFromForm(formData);
 
   // Clubs and coaches are read outside the transaction: they're pure reads
@@ -82,6 +95,7 @@ export async function startDraft(formData: FormData) {
         leagues: leagues.join(","),
         years: years.join(","),
         formation,
+        gameMode,
         cardPacksEnabled: false,
         chemistryEnabled: rules.chemistry,
         coachEnabled: rules.coach,
@@ -116,7 +130,7 @@ export async function startDraft(formData: FormData) {
             draftOrder: draftOrder++,
             // CPU teams each chase their own shape, so the field isn't 19
             // clones competing for the identical eleven roles.
-            formation: shuffled(FORMATIONS)[0].key,
+            formation: shuffled(modeFormations)[0].key,
           };
         }),
       });

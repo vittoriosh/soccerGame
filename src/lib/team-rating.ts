@@ -171,11 +171,20 @@ export function computeUnifiedRating(
  */
 const STARTER_SHARE = 0.86;
 const BENCH_SHARE = 0.06;
-const SLOT_WEIGHT = STARTER_SHARE / STARTER_SLOTS;
+
+export function starterSlotWeight(starterCount: number): number {
+  return STARTER_SHARE / Math.max(1, starterCount);
+}
+
+export function benchSlotWeight(benchCount: number): number {
+  return BENCH_SHARE / Math.max(1, benchCount);
+}
+
+const SLOT_WEIGHT = starterSlotWeight(STARTER_SLOTS);
 /** The four bench picks split BENCH_SHARE between them — so a bench pick is
  *  worth roughly a fifth of a starting slot, which is what stops the CPU
  *  from ever taking a backup over a starter. */
-export const BENCH_SLOT_WEIGHT = BENCH_SHARE / 4;
+export const BENCH_SLOT_WEIGHT = benchSlotWeight(4);
 
 export type SquadPlayer = {
   id: number;
@@ -230,6 +239,7 @@ export function computeSquadRating(args: {
   let weight = 0;
   let swing = 0;
   let fitCost = 0;
+  const slotWeight = starterSlotWeight(formation.slots.length);
 
   for (const slot of formation.slots) {
     const player = starters.get(slot.id) ?? null;
@@ -261,10 +271,10 @@ export function computeSquadRating(args: {
       rules,
     );
 
-    score += SLOT_WEIGHT * effective;
-    weight += SLOT_WEIGHT;
-    swing += SLOT_WEIGHT * (effective - player.overall);
-    fitCost += SLOT_WEIGHT * penalty;
+    score += slotWeight * effective;
+    weight += slotWeight;
+    swing += slotWeight * (effective - player.overall);
+    fitCost += slotWeight * penalty;
 
     const bucket = byGroup.get(slot.group)!;
     bucket.raw.push(player.overall);
@@ -316,7 +326,7 @@ export function computeSquadRating(args: {
       group,
       rawAvg: average(bucket.raw),
       effectiveAvg: average(bucket.eff),
-      weight: SLOT_WEIGHT * slotCount,
+      weight: slotWeight * slotCount,
     };
   }).filter((line) => line.weight > 0);
 

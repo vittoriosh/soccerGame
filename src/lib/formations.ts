@@ -1,4 +1,9 @@
 import type { PositionGroup } from "./positions";
+import {
+  DEFAULT_GAME_MODE,
+  normalizeGameMode,
+  type GameMode,
+} from "./game-mode";
 
 /**
  * A formation is the spine of the whole game now: it's chosen once at setup,
@@ -58,6 +63,7 @@ export type FormationSlot = {
 export type Formation = {
   key: string;
   name: string;
+  mode: GameMode;
   /** One-line read on what the shape asks of you. */
   blurb: string;
   slots: FormationSlot[];
@@ -85,6 +91,7 @@ export const FORMATIONS: Formation[] = [
   {
     key: "4-3-3",
     name: "4-3-3",
+    mode: "classic",
     blurb: "Balanced. Wingers carry the attack.",
     slots: slots([
       ["GK", 50, 94],
@@ -103,6 +110,7 @@ export const FORMATIONS: Formation[] = [
   {
     key: "4-4-2",
     name: "4-4-2",
+    mode: "classic",
     blurb: "Two banks of four, two strikers.",
     slots: slots([
       ["GK", 50, 94],
@@ -121,6 +129,7 @@ export const FORMATIONS: Formation[] = [
   {
     key: "4-2-3-1",
     name: "4-2-3-1",
+    mode: "classic",
     blurb: "Double pivot behind a creative three.",
     slots: slots([
       ["GK", 50, 94],
@@ -139,6 +148,7 @@ export const FORMATIONS: Formation[] = [
   {
     key: "3-5-2",
     name: "3-5-2",
+    mode: "classic",
     blurb: "Midfield overload, three at the back.",
     slots: slots([
       ["GK", 50, 94],
@@ -157,6 +167,7 @@ export const FORMATIONS: Formation[] = [
   {
     key: "5-3-2",
     name: "5-3-2",
+    mode: "classic",
     blurb: "Back five with wing-backs. Hard to break.",
     slots: slots([
       ["GK", 50, 94],
@@ -172,18 +183,90 @@ export const FORMATIONS: Formation[] = [
       ["ST", 63, 11],
     ]),
   },
+  {
+    key: "7s-2-3-1",
+    name: "2-3-1",
+    mode: "sevens",
+    blurb: "Balanced width with one focal striker.",
+    slots: slots([
+      ["GK", 50, 91],
+      ["CB", 32, 70],
+      ["CB", 68, 70],
+      ["LM", 16, 43],
+      ["CM", 50, 49],
+      ["RM", 84, 43],
+      ["ST", 50, 13],
+    ]),
+  },
+  {
+    key: "7s-3-2-1",
+    name: "3-2-1",
+    mode: "sevens",
+    blurb: "Secure back three, narrow midfield pair.",
+    slots: slots([
+      ["GK", 50, 91],
+      ["CB", 22, 70],
+      ["CB", 50, 75],
+      ["CB", 78, 70],
+      ["CM", 34, 45],
+      ["CM", 66, 45],
+      ["ST", 50, 13],
+    ]),
+  },
+  {
+    key: "7s-2-2-2",
+    name: "2-2-2",
+    mode: "sevens",
+    blurb: "Direct and aggressive with two forwards.",
+    slots: slots([
+      ["GK", 50, 91],
+      ["CB", 32, 70],
+      ["CB", 68, 70],
+      ["CM", 32, 45],
+      ["CM", 68, 45],
+      ["ST", 34, 14],
+      ["ST", 66, 14],
+    ]),
+  },
+  {
+    key: "7s-1-3-2",
+    name: "1-3-2",
+    mode: "sevens",
+    blurb: "High-risk overload: one defender, five ahead.",
+    slots: slots([
+      ["GK", 50, 91],
+      ["CB", 50, 72],
+      ["LM", 16, 45],
+      ["CM", 50, 50],
+      ["RM", 84, 45],
+      ["ST", 34, 14],
+      ["ST", 66, 14],
+    ]),
+  },
 ];
 
 export const DEFAULT_FORMATION_KEY = "4-3-3";
+export const DEFAULT_SEVENS_FORMATION_KEY = "7s-2-3-1";
+
+export function formationsForMode(mode: string | null | undefined): Formation[] {
+  const normalized = normalizeGameMode(mode);
+  return FORMATIONS.filter((formation) => formation.mode === normalized);
+}
+
+export function defaultFormationForMode(mode: string | null | undefined): string {
+  return normalizeGameMode(mode) === "sevens"
+    ? DEFAULT_SEVENS_FORMATION_KEY
+    : DEFAULT_FORMATION_KEY;
+}
 
 export function getFormation(key: string | null | undefined): Formation {
   return (
     FORMATIONS.find((f) => f.key === key) ??
-    FORMATIONS.find((f) => f.key === DEFAULT_FORMATION_KEY)!
+    formationsForMode(DEFAULT_GAME_MODE).find((f) => f.key === DEFAULT_FORMATION_KEY)!
   );
 }
 
-/** Every formation fields eleven; the four remaining picks are bench. */
+/** Classic formations field eleven; mode-aware callers use formation.slots.length. */
 export const STARTER_SLOTS = 11;
 
 /**
@@ -290,12 +373,13 @@ export function positionFit(positions: string, slotCode: SlotCode): Fit {
  */
 export function slotNeighbours(formation: Formation): Map<string, Set<string>> {
   const map = new Map<string, Set<string>>();
+  const neighbourCount = formation.slots.length <= 7 ? 2 : 3;
   for (const slot of formation.slots) {
     const nearest = formation.slots
       .filter((s) => s.id !== slot.id)
       .map((s) => ({ id: s.id, d: (s.x - slot.x) ** 2 + (s.y - slot.y) ** 2 }))
       .sort((a, b) => a.d - b.d)
-      .slice(0, 3)
+      .slice(0, neighbourCount)
       .map((s) => s.id);
     map.set(slot.id, new Set(nearest));
   }

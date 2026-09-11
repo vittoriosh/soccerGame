@@ -28,7 +28,12 @@ import {
   applyCoachChemistryBoost,
   averageChemistry,
 } from "@/lib/chemistry";
-import { BENCH_PICKS, scoringRulesFromDraft, type ScoringRules } from "@/lib/scoring-rules";
+import {
+  benchPicksForMode,
+  scoringRulesFromDraft,
+  type ScoringRules,
+} from "@/lib/scoring-rules";
+import { gameModeConfig } from "@/lib/game-mode";
 import { makePick, makeCoachPick } from "./actions";
 
 const PAGE_SIZE = 8;
@@ -181,6 +186,7 @@ async function bestPossibleForUser(args: {
   allPicks: { teamId: number; playerId: number; pickNumber: number }[];
   allCoachPicks: { teamId: number; coachId: number; pickNumber: number }[];
   rules: ScoringRules;
+  benchSlots: number;
 }): Promise<Hindsight | null> {
   const userPicks: number[] = [];
   for (let pick = 1; pick <= args.totalPicks; pick++) {
@@ -229,7 +235,7 @@ async function bestPossibleForUser(args: {
     userPicks,
     players,
     coaches,
-    benchSlots: BENCH_PICKS,
+    benchSlots: args.benchSlots,
     rules: args.rules,
   });
   if (!best) return null;
@@ -289,6 +295,9 @@ export default async function DraftBoardPage({
   const selectedYears = parseDraftYears(draft.years);
 
   const rules = scoringRulesFromDraft(draft);
+  const mode = gameModeConfig(draft.gameMode);
+  const starterCount = mode.starters;
+  const benchPicks = benchPicksForMode(draft.gameMode);
   const rounds = roundsForDraft(draft);
   const teams = await prisma.team.findMany({
     where: { draftId },
@@ -393,6 +402,7 @@ export default async function DraftBoardPage({
       allPicks,
       allCoachPicks,
       rules,
+      benchSlots: benchPicks,
     });
 
     return (
@@ -404,6 +414,7 @@ export default async function DraftBoardPage({
           rating={unified.rating}
           chemistry={teamChemistry}
           naturalStarters={naturalStarters}
+          starterCount={starterCount}
           fitCost={unified.fitCost}
           occupants={[...myOccupants.entries()].map(([slotId, player]) => ({
             slotId,
@@ -437,7 +448,7 @@ export default async function DraftBoardPage({
   const mustDraftCoachNow = rules.coach && round === rounds && !myHasCoach;
 
   const openSlots = me.formation.slots.filter((s) => !me.starters.has(s.id));
-  const benchOpen = openSlots.length === 0 && me.bench.length < BENCH_PICKS;
+  const benchOpen = openSlots.length === 0 && me.bench.length < benchPicks;
 
   const {
     q = "",
@@ -607,7 +618,7 @@ export default async function DraftBoardPage({
                     title="Starters in natural / comfortable roles"
                   >
                     {naturalStartersLive}
-                    <span className="text-lg text-white/40">/11</span>
+                    <span className="text-lg text-white/40">/{starterCount}</span>
                   </div>
                   <div className="text-[10px] tracking-[0.18em] text-white/40 uppercase">Natural</div>
                 </div>
@@ -648,7 +659,7 @@ export default async function DraftBoardPage({
           <summary
             className={`${bebas.className} flex min-h-11 cursor-pointer list-none items-center justify-between border border-white/20 bg-black/45 px-3 text-base tracking-[0.14em] text-white/75 [&::-webkit-details-marker]:hidden`}
           >
-            Squad &amp; factors · {me.starters.size}/11
+            Squad &amp; factors · {me.starters.size}/{starterCount}
             <span aria-hidden className="text-xl transition group-open:rotate-45">
               +
             </span>
@@ -672,6 +683,7 @@ export default async function DraftBoardPage({
                   fitCost={unified.fitCost}
                   naturalStarters={naturalStartersLive}
                   filledSlots={me.starters.size}
+                  starterCount={starterCount}
                   experienceLabel={unified.experienceLabel}
                   experienceDelta={unified.experienceDelta}
                   coachRating={myCoachRating}
@@ -929,7 +941,7 @@ export default async function DraftBoardPage({
           <section className="relative hidden min-h-0 flex-col lg:flex">
             <div className="mb-2 flex shrink-0 items-center justify-between text-[11px] tracking-[0.16em] text-white/40 uppercase">
               <span>
-                {me.starters.size}/11 XI
+                {me.starters.size}/{starterCount} {mode.shortLabel}
                 {me.bench.length > 0 ? ` · ${me.bench.length} sub` : ""}
               </span>
               {myCoachPick?.coach && (
@@ -954,6 +966,7 @@ export default async function DraftBoardPage({
                   fitCost={unified.fitCost}
                   naturalStarters={naturalStartersLive}
                   filledSlots={me.starters.size}
+                  starterCount={starterCount}
                   experienceLabel={unified.experienceLabel}
                   experienceDelta={unified.experienceDelta}
                   coachRating={myCoachRating}

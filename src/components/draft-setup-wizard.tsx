@@ -4,25 +4,35 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { barlow, bebas } from "@/lib/game-fonts";
 import { PREMIER_LEAGUE } from "@/lib/league-data";
 import { startDraft } from "@/app/draft/actions";
-import { FORMATIONS, DEFAULT_FORMATION_KEY } from "@/lib/formations";
+import {
+  defaultFormationForMode,
+  formationsForMode,
+} from "@/lib/formations";
+import {
+  GAME_MODE_CONFIG,
+  DEFAULT_GAME_MODE,
+  type GameMode,
+} from "@/lib/game-mode";
 import {
   DEFAULT_SCORING_RULES,
   SCORING_RULE_FIELDS,
   type ScoringRules,
 } from "@/lib/scoring-rules";
 
-type Step = "leagues" | "teams" | "years" | "formation" | "rules";
+type Step = "mode" | "leagues" | "teams" | "years" | "formation" | "rules";
 
 const MAX_YEARS = 3;
 
 const STEP_INFO: Record<Step, string> = {
+  mode:
+    "Classic fields eleven starters and four substitutes. 7s uses seven starters and two substitutes with its own tighter formations and shorter draft.",
   leagues:
     "Pick one or more leagues to draft from. Every league fields its real clubs; the Premier League also uses its real head coaches.",
   teams:
-    "Defaults to 20. Minimum 2. Maximum is 20 per league you picked (2 leagues → 40, 3 → 60, and so on).",
+    "Defaults to 20 teams per league you picked (2 leagues → 40, 3 → 60, and so on).",
   years: "Pick 1–3 player card years. Only players from those years can be drafted.",
   formation:
-    "Locked for the whole draft. All eleven slots count equally toward your rating, so the shape decides where you can afford to lose a battle. Players drafted into their natural position gain rating and chemistry; anyone played out of position loses both.",
+    "Locked for the whole draft. Every starting slot counts equally, so the shape decides where you can afford to lose a battle. Natural positions gain rating and chemistry; anyone played out of position loses both.",
   rules:
     "Classic is the full game — chemistry, coach, age, potential and fit all count, same as always. Edit opens a popup if you want to turn any of those off.",
 };
@@ -100,12 +110,15 @@ export function DraftSetupWizard({
   maxTeamsPerLeague: number;
 }) {
   const defaultYear = availableYears[0] ?? 2026;
-  const [step, setStep] = useState<Step>("leagues");
+  const [step, setStep] = useState<Step>("mode");
+  const [gameMode, setGameMode] = useState<GameMode>(DEFAULT_GAME_MODE);
   const [selected, setSelected] = useState<string[]>([PREMIER_LEAGUE]);
   const [totalTeams, setTotalTeams] = useState(teamsPerLeagueDefault);
   const [showMore, setShowMore] = useState(false);
   const [selectedYears, setSelectedYears] = useState<number[]>([defaultYear]);
-  const [formation, setFormation] = useState(DEFAULT_FORMATION_KEY);
+  const [formation, setFormation] = useState(
+    defaultFormationForMode(DEFAULT_GAME_MODE),
+  );
   const [rules, setRules] = useState<ScoringRules>(DEFAULT_SCORING_RULES);
   const [editOpen, setEditOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,6 +138,13 @@ export function DraftSetupWizard({
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const selectedYearSet = useMemo(() => new Set(selectedYears), [selectedYears]);
   const leagueOptions = showMore ? [...topLeagues, ...otherLeagues] : topLeagues;
+  const availableFormations = formationsForMode(gameMode);
+
+  function chooseGameMode(mode: GameMode) {
+    setGameMode(mode);
+    setFormation(defaultFormationForMode(mode));
+    setError(null);
+  }
 
   function clampTeams(n: number, leagueCount = selected.length) {
     const max = Math.max(minTotal, leagueCount * maxTeamsPerLeague);
@@ -171,6 +191,10 @@ export function DraftSetupWizard({
   }
 
   function goNext() {
+    if (step === "mode") {
+      setStep("leagues");
+      return;
+    }
     if (step === "leagues") {
       if (selected.length === 0) {
         setError("Pick at least one league");
@@ -201,6 +225,7 @@ export function DraftSetupWizard({
   function goBack() {
     setError(null);
     setShowMore(false);
+    if (step === "leagues") setStep("mode");
     if (step === "teams") setStep("leagues");
     if (step === "years") setStep("teams");
     if (step === "formation") setStep("years");
@@ -216,6 +241,7 @@ export function DraftSetupWizard({
       return;
     }
     const formData = new FormData();
+    formData.set("gameMode", gameMode);
     for (const league of selected) formData.append("leagues", league);
     for (const year of selectedYears) formData.append("years", String(year));
     formData.set("totalTeams", String(clampTeams(totalTeams)));
@@ -236,6 +262,46 @@ export function DraftSetupWizard({
   return (
     <div className="flex w-full max-w-4xl flex-col items-center py-2 text-center sm:py-4">
       <div key={step} className="home-fade-in w-full">
+        {step === "mode" && (
+          <>
+            <h1
+              className={`${bebas.className} flex items-center justify-center text-4xl tracking-wide text-white sm:text-6xl`}
+            >
+              Choose Game Mode
+              <InfoTip text={STEP_INFO.mode} />
+            </h1>
+            <div className="mx-auto mt-8 grid w-full max-w-2xl gap-3 sm:mt-10 sm:grid-cols-2">
+              {(Object.entries(GAME_MODE_CONFIG) as [GameMode, (typeof GAME_MODE_CONFIG)[GameMode]][]).map(
+                ([mode, config]) => {
+                  const on = gameMode === mode;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => chooseGameMode(mode)}
+                      className={`border-2 px-5 py-6 text-left transition ${
+                        on
+                          ? "border-white bg-white text-black"
+                          : "border-white/40 bg-black/55 text-white hover:border-white"
+                      }`}
+                    >
+                      <span className={`${bebas.className} block text-4xl tracking-wide`}>
+                        {config.label}
+                      </span>
+                      <span className="mt-2 block text-sm leading-relaxed opacity-65">
+                        {config.starters} starters · {config.bench} subs
+                      </span>
+                      <span className="mt-1 block text-sm leading-relaxed opacity-65">
+                        {config.description}
+                      </span>
+                    </button>
+                  );
+                },
+              )}
+            </div>
+          </>
+        )}
+
         {step === "leagues" && (
           <>
             <h1
@@ -376,7 +442,7 @@ export function DraftSetupWizard({
             </h1>
 
             <div className="mt-8 grid grid-cols-2 gap-2 sm:mt-10 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
-              {FORMATIONS.map((f) => {
+              {availableFormations.map((f) => {
                 const on = formation === f.key;
                 return (
                   <button
@@ -412,7 +478,9 @@ export function DraftSetupWizard({
               <InfoTip text={STEP_INFO.rules} />
             </h1>
             <p className="mx-auto mt-4 max-w-xl text-sm text-white/55">
-              Classic is the full game. Edit only if you want to turn factors off.
+              {gameMode === "sevens"
+                ? "Full 7s rules are on. Edit only if you want to turn factors off."
+                : "Classic is the full game. Edit only if you want to turn factors off."}
             </p>
 
             <div className="mx-auto mt-10 flex w-full max-w-md flex-col gap-4">
@@ -437,7 +505,7 @@ export function DraftSetupWizard({
       {error && <p className="mt-6 text-sm font-medium text-red-200">{error}</p>}
 
       <div className="sticky right-0 bottom-0 left-0 z-30 mt-8 grid w-full grid-cols-2 gap-3 border-t border-white/15 bg-black/85 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:static sm:mt-10 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-center sm:gap-4 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
-        {step !== "leagues" && (
+        {step !== "mode" && (
           <button
             type="button"
             onClick={goBack}
@@ -468,7 +536,11 @@ export function DraftSetupWizard({
             }}
             className={`${bebas.className} col-start-2 min-h-14 border-2 border-white bg-white px-4 py-3 text-2xl tracking-[0.12em] text-black transition hover:bg-transparent hover:text-white disabled:opacity-60 sm:px-12 sm:py-5 sm:text-3xl`}
           >
-            {pending && classic ? "Starting…" : "Classic"}
+            {pending && classic
+              ? "Starting…"
+              : gameMode === "sevens"
+                ? "Start 7s"
+                : "Classic"}
           </button>
         )}
       </div>

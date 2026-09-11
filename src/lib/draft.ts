@@ -1,17 +1,21 @@
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client";
 import { POSITION_GROUPS, STARTER_CAPS, STARTER_TOTAL, type PositionGroup } from "@/lib/positions";
-import { COACH_WEIGHT, SLOT_WEIGHT, BENCH_SLOT_WEIGHT } from "@/lib/team-rating";
 import {
+  COACH_WEIGHT,
+  benchSlotWeight,
+  starterSlotWeight,
+} from "@/lib/team-rating";
+import {
+  benchPicksForMode,
   roundsForRules,
   scoringRulesFromDraft,
-  PLAYER_PICKS_PER_TEAM,
 } from "@/lib/scoring-rules";
+import { normalizeGameMode } from "@/lib/game-mode";
 import {
   FIT_CHEMISTRY_MOD,
   FIT_RATING_PENALTY,
   FIT_TIERS,
-  STARTER_SLOTS,
   assignSquadToFormation,
   getFormation,
   positionFit,
@@ -29,8 +33,9 @@ export function roundsForDraft(draft: {
   ageEnabled?: boolean | null;
   potentialEnabled?: boolean | null;
   fitEnabled?: boolean | null;
+  gameMode?: string | null;
 }): number {
-  return roundsForRules(scoringRulesFromDraft(draft));
+  return roundsForRules(scoringRulesFromDraft(draft), draft.gameMode);
 }
 
 /** Comma-separated draft.years → number list used in player filters. */
@@ -53,10 +58,20 @@ export async function draftTotals(draftId: number) {
     prisma.team.count({ where: { draftId } }),
     prisma.draft.findUnique({
       where: { id: draftId },
-      select: { coachEnabled: true },
+      select: {
+        coachEnabled: true,
+        chemistryEnabled: true,
+        ageEnabled: true,
+        potentialEnabled: true,
+        fitEnabled: true,
+        gameMode: true,
+      },
     }),
   ]);
-  const rounds = roundsForRules(scoringRulesFromDraft(draft ?? {}));
+  const rounds = roundsForRules(
+    scoringRulesFromDraft(draft ?? {}),
+    draft?.gameMode,
+  );
   return { teamCount, totalPicks: teamCount * rounds, rounds };
 }
 
@@ -323,7 +338,9 @@ export async function advanceDraft(draftId: number) {
   const years = parseDraftYears(draft.years);
   const multiLeague = leagues.length > 1;
   const rules = scoringRulesFromDraft(draft);
-  const rounds = roundsForRules(rules);
+  const gameMode = normalizeGameMode(draft.gameMode);
+  const benchPicks = benchPicksForMode(gameMode);
+  const rounds = roundsForRules(rules, gameMode);
   const teams = await prisma.team.findMany({
     where: { draftId },
     orderBy: { draftOrder: "asc" },
@@ -450,7 +467,7 @@ export async function advanceDraft(draftId: number) {
         total++;
       }
       // Bench picks come out of the general pool, spread across groups.
-      const benchLeft = Math.max(0, PLAYER_PICKS_PER_TEAM - STARTER_SLOTS - state.benchCount);
+      const benchLeft = Math.max(0, benchPicks - state.benchCount);
       if (state.openSlots.length === 0) {
         for (const group of POSITION_GROUPS) counts[group] += benchLeft / 4;
         total += benchLeft;
@@ -543,7 +560,9 @@ export async function advanceDraft(draftId: number) {
           // many teams are chasing this same line.
           const expectedGone = Math.round(window * demand.byGroup[slot.group] * temperament.patience);
           const replacement = scored[Math.min(expectedGone, scored.length - 1)];
-          const surplus = SLOT_WEIGHT * (scored[0].value - replacement.value);
+          const surplus =
+            starterSlotWeight(state.formation.slots.length) *
+            (scored[0].value - replacement.value);
           if (!best || surplus > best.surplus) {
             best = { surplus, candidate: scored[0].candidate, slot };
           }
@@ -580,7 +599,9 @@ export async function advanceDraft(draftId: number) {
           if (scored.length === 0) continue;
           const expectedGone = Math.round(window * demand.byGroup[group] * temperament.patience);
           const replacement = scored[Math.min(expectedGone, scored.length - 1)];
-          const surplus = BENCH_SLOT_WEIGHT * (scored[0].value - replacement.value);
+          const surplus =
+            benchSlotWeight(benchPicks) *
+            (scored[0].value - replacement.value);
           if (!best || surplus > best.surplus) {
             best = { surplus, candidate: scored[0].candidate, slot: null };
           }

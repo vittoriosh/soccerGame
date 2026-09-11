@@ -65,6 +65,7 @@ export function DraftCompleteFlow({
   rating,
   chemistry,
   naturalStarters,
+  starterCount = 11,
   fitCost,
   occupants = [],
   lines = [],
@@ -79,6 +80,7 @@ export function DraftCompleteFlow({
   rating: number;
   chemistry: number;
   naturalStarters: number;
+  starterCount?: number;
   fitCost: number;
   occupants?: { slotId: string; player: SlotOccupant }[];
   lines?: CompleteLine[];
@@ -201,17 +203,17 @@ export function DraftCompleteFlow({
         {step === "squad" && (
           <>
             <p className={`${bebas.className} text-sm tracking-[0.35em] text-white/55`}>
-              Your XI · {formation.name}
+              Your {starterCount} · {formation.name}
             </p>
             <h1 className={`${bebas.className} mt-2 text-5xl tracking-wide text-white sm:text-6xl`}>
               {clubName}
             </h1>
             <p className="mt-2 text-sm text-white/55">
               {rules.fit
-                ? `${naturalStarters}/11 in natural position${
+                ? `${naturalStarters}/${starterCount} in natural position${
                     fitCost < 0 ? ` · ${fitCost.toFixed(1)} from misplaced players` : ""
                   }`
-                : "Your starting eleven"}
+                : "Your starting lineup"}
             </p>
             <div className="mx-auto mt-6 aspect-[3/4] w-full max-w-sm sm:max-w-md">
               <SlotPitch formation={formation} occupants={occupantMap} />
@@ -345,7 +347,7 @@ export function DraftCompleteFlow({
                 <div className="text-[10px] tracking-[0.16em] text-white/50 uppercase">Natural</div>
                 <div className={`${bebas.className} mt-1 text-4xl leading-none text-white`}>
                   {naturalStarters}
-                  <span className="text-xl text-white/40">/11</span>
+                  <span className="text-xl text-white/40">/{starterCount}</span>
                 </div>
               </div>
               )}
@@ -355,7 +357,7 @@ export function DraftCompleteFlow({
               <p
                 className={`${bebas.className} mb-3 text-center text-lg tracking-[0.2em] text-white/50`}
               >
-                Tap a club to see their XI
+                Tap a club to see their squad
               </p>
               <ul className="max-h-[34vh] space-y-1 overflow-y-auto">
                 {teams.map((row, i) => (

@@ -1,3 +1,9 @@
+import {
+  gameModeConfig,
+  playerPicksForMode,
+  type GameMode,
+} from "./game-mode";
+
 /**
  * Per-draft switches for what actually counts toward the team rating.
  * Chosen once at setup and locked — the CPU, the board, and the final
@@ -108,6 +114,15 @@ export function scoringRulesFromDraft(draft: {
 export const PLAYER_PICKS_PER_TEAM = 15;
 export const BENCH_PICKS = 4;
 
-export function roundsForRules(rules: ScoringRules): number {
-  return PLAYER_PICKS_PER_TEAM + (rules.coach ? 1 : 0);
+export function benchPicksForMode(
+  gameMode: GameMode | string | null | undefined,
+): number {
+  return gameModeConfig(gameMode).bench;
+}
+
+export function roundsForRules(
+  rules: ScoringRules,
+  gameMode: GameMode | string | null | undefined = "classic",
+): number {
+  return playerPicksForMode(gameMode) + (rules.coach ? 1 : 0);
 }

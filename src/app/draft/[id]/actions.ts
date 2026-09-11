@@ -85,7 +85,7 @@ export async function makePick(formData: FormData) {
     }
     slotId = best.id;
   } else if (!squad.benchOpen) {
-    throw new Error("Fill your starting eleven before drafting bench players");
+    throw new Error("Fill your starting lineup before drafting bench players");
   }
 
   await prisma.draftPick.create({

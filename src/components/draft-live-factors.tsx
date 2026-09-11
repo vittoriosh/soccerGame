@@ -39,6 +39,7 @@ export function DraftLiveFactors({
   fitCost,
   naturalStarters,
   filledSlots,
+  starterCount = 11,
   experienceLabel,
   experienceDelta,
   coachRating,
@@ -51,6 +52,7 @@ export function DraftLiveFactors({
   fitCost: number;
   naturalStarters: number;
   filledSlots: number;
+  starterCount?: number;
   experienceLabel: string;
   experienceDelta: number;
   coachRating: number | undefined;
@@ -102,16 +104,16 @@ export function DraftLiveFactors({
       {
         key: "natural",
         label: "Natural",
-        value: `${naturalStarters}/11`,
+        value: `${naturalStarters}/${starterCount}`,
         className:
           filledSlots === 0
             ? "text-white/50"
-            : naturalStarters === filledSlots && filledSlots >= 11
+            : naturalStarters === filledSlots && filledSlots >= starterCount
               ? "text-emerald-300"
               : naturalStarters / Math.max(filledSlots, 1) >= 0.7
                 ? "text-white"
                 : "text-amber-300",
-        title: "Starters in a natural or comfortable role out of eleven. Misplaced players cost rating and chemistry.",
+        title: `Starters in a natural or comfortable role out of ${starterCount}. Misplaced players cost rating and chemistry.`,
       },
     );
   }

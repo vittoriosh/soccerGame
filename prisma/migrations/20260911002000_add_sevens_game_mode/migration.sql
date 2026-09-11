@@ -1,0 +1,2 @@
+ALTER TABLE "Draft"
+ADD COLUMN "gameMode" TEXT NOT NULL DEFAULT 'classic';

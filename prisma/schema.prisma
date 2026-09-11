@@ -154,6 +154,8 @@ model Draft {
   years            String   @default("2026")
   /** Chosen at setup and locked for the whole draft — see formations.ts. */
   formation        String   @default("4-3-3")
+  /** classic = 11 starters + 4 subs; sevens = 7 starters + 2 subs. */
+  gameMode         String   @default("classic")
   currentPick      Int      @default(1)
   status           String   @default("selecting_team")
   cardPacksEnabled Boolean  @default(false)

@@ -5,10 +5,10 @@ import {
   type FormationSlot,
 } from "./formations";
 import {
-  BENCH_SLOT_WEIGHT,
   COACH_WEIGHT,
-  SLOT_WEIGHT,
+  benchSlotWeight,
   computeSquadRating,
+  starterSlotWeight,
 } from "./team-rating";
 import { applyCoachChemistryBoost, computeSquadChemistry } from "./chemistry";
 import { DEFAULT_SCORING_RULES, type ScoringRules } from "./scoring-rules";
@@ -87,12 +87,19 @@ function isReachable(choices: Choice[], userPicks: number[]): boolean {
 /** Static, chemistry-free worth of one candidate in one role, in the same
  *  rating-point currency the CPU uses — so slots, bench and coach compete
  *  on one scale during the opening greedy pass. */
-function staticValue(choice: Choice, rules: ScoringRules): number {
+function staticValue(
+  choice: Choice,
+  rules: ScoringRules,
+  starterCount: number,
+  benchSlots: number,
+): number {
   if (choice.kind === "coach") return rules.coach ? COACH_WEIGHT * choice.coach.rating : 0;
-  if (choice.kind === "bench") return BENCH_SLOT_WEIGHT * choice.player.overall;
+  if (choice.kind === "bench") {
+    return benchSlotWeight(benchSlots) * choice.player.overall;
+  }
   const fit = positionFit(choice.player.positions, choice.slot.code);
   const penalty = rules.fit ? FIT_RATING_PENALTY[fit] : 0;
-  return SLOT_WEIGHT * (choice.player.overall + penalty);
+  return starterSlotWeight(starterCount) * (choice.player.overall + penalty);
 }
 
 function ratePlan(
@@ -207,7 +214,11 @@ export function bestPossibleSquad({
       options.push({ kind: "coach", coach });
     }
   }
-  options.sort((a, b) => staticValue(b, rules) - staticValue(a, rules));
+  options.sort(
+    (a, b) =>
+      staticValue(b, rules, formation.slots.length, benchSlots) -
+      staticValue(a, rules, formation.slots.length, benchSlots),
+  );
 
   const chosen: Choice[] = [];
   const usedPlayers = new Set<number>();

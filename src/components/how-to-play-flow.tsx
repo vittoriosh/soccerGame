@@ -20,10 +20,10 @@ type Chapter = {
 const CHAPTERS: Chapter[] = [
   {
     title: "The Draft",
-    lead: "One board, sixteen rounds, everyone filling the same team sheet. The order snakes — whoever picks last in a round picks first in the next, so a late slot pays you back straight away.",
+    lead: "One shared board, everyone filling the same-size team sheet. The order snakes — whoever picks last in a round picks first in the next, so a late slot pays you back straight away.",
     points: [
       {
-        label: "Sixteen picks",
+        label: "Classic: sixteen picks",
         text: "Eleven starters, four on the bench, one coach. No trades, no waivers.",
       },
       {
@@ -37,8 +37,35 @@ const CHAPTERS: Chapter[] = [
     ],
   },
   {
+    title: "7s",
+    lead: "Seven-a-side is a shorter draft, not an easier rating. Seven starters carry the same 86% that eleven do in Classic, so every weak slot hurts more.",
+    tiles: [
+      { label: "Starters", value: "7", note: "86% total" },
+      { label: "Bench", value: "2", note: "6% total" },
+      { label: "Coach", value: "1", note: "8% total" },
+    ],
+    points: [
+      {
+        label: "2-3-1 — balanced",
+        text: "Width and midfield control, but your lone striker has to carry the attack.",
+      },
+      {
+        label: "3-2-1 — secure",
+        text: "The safest back line. It creates heavy demand for centre-backs and central midfielders.",
+      },
+      {
+        label: "2-2-2 — direct",
+        text: "Two forwards make elite finishing decisive, at the cost of midfield width.",
+      },
+      {
+        label: "1-3-2 — high risk",
+        text: "Five players ahead of one defender. Huge attacking upside, but one bad centre-back can sink the rating.",
+      },
+    ],
+  },
+  {
     title: "Your Shape",
-    lead: "You lock a formation before the draft and you never change it. The eleven slots split most of your rating equally, so the shape decides where your rating gets spent.",
+    lead: "You lock a formation before the draft and never change it. The starting slots split most of your rating equally, so the shape decides where your rating gets spent.",
     tiles: [
       { label: "Starting XI", value: "86%", note: "11 equal slots" },
       { label: "Coach", value: "8%", note: "one pick" },
@@ -105,7 +132,7 @@ const CHAPTERS: Chapter[] = [
   },
   {
     title: "The Coach",
-    lead: "One pick, 8% of your rating — and the only pick that touches all fifteen others. That is why coaches go early.",
+    lead: "One pick, 8% of your rating — and the only pick that touches your entire squad. That is why coaches go early.",
     points: [
       {
         label: "Squad-wide chemistry",
@@ -147,7 +174,7 @@ const CHAPTERS: Chapter[] = [
       },
       {
         label: "Fill your shape exactly",
-        text: "Eleven natural fits is worth several rating points over the same eleven players shuffled to make them fit.",
+        text: "A full team of natural fits is worth several rating points over the same players shuffled to make them fit.",
       },
       {
         label: "Spend early picks where the drop-off is steepest",
