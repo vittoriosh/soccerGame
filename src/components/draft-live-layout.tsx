@@ -15,15 +15,12 @@ export function DraftLiveLayout({
   currentPick: number;
 }) {
   const [tab, setTab] = useState<"draft" | "team">("draft");
-  const [waiting, setWaiting] = useState(false);
-
-  useEffect(() => {
-    setWaiting(false);
-  }, [currentPick]);
+  const [waitingAtPick, setWaitingAtPick] = useState<number | null>(null);
+  const waiting = waitingAtPick === currentPick;
 
   useEffect(() => {
     if (!waiting) return;
-    const timer = window.setTimeout(() => setWaiting(false), 8000);
+    const timer = window.setTimeout(() => setWaitingAtPick(null), 8000);
     return () => window.clearTimeout(timer);
   }, [waiting]);
 
@@ -63,7 +60,7 @@ export function DraftLiveLayout({
             return;
           }
           setTab("draft");
-          setWaiting(true);
+          setWaitingAtPick(currentPick);
         }}
       >
         <div

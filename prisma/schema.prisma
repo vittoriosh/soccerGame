@@ -156,6 +156,12 @@ model Draft {
   formation        String   @default("4-3-3")
   /** classic = 11 starters + 4 subs; sevens = 7 starters + 2 subs. */
   gameMode         String   @default("classic")
+  /** Optional 7s career ladder. New careers begin in Division 5 and each
+   *  completed draft can create exactly one following season. */
+  divisionsEnabled Boolean  @default(false)
+  division         Int      @default(5)
+  seasonNumber     Int      @default(1)
+  previousSeasonDraftId Int? @unique
   currentPick      Int      @default(1)
   status           String   @default("selecting_team")
   cardPacksEnabled Boolean  @default(false)
@@ -175,6 +181,8 @@ model Draft {
   picks      DraftPick[]
   coachPicks CoachPick[]
   cardPacks  CardPack[]
+  previousSeason Draft? @relation("DraftSeasonChain", fields: [previousSeasonDraftId], references: [id])
+  nextSeason     Draft? @relation("DraftSeasonChain")
 }
 
 /** Coaches are generated per-draft too, for the same reason as Team. */

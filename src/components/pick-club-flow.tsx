@@ -85,12 +85,14 @@ export function PickClubFlow({
   chosenClub,
   revealedPick,
   teamCount,
+  seasonLabel,
 }: {
   draftId: number;
   clubs: ClubOption[];
   chosenClub: ClubOption | null;
   revealedPick: number | null;
   teamCount: number;
+  seasonLabel?: string | null;
 }) {
   const [pending, startTransition] = useTransition();
   const [rolling, setRolling] = useState(false);
@@ -176,6 +178,11 @@ export function PickClubFlow({
             Draft Order
             <InfoTip text="Roll for a random snake-draft slot. Pick #1 goes first; later slots get better reverse-order turns." />
           </h1>
+          {seasonLabel && (
+            <p className={`${bebas.className} mt-2 text-xl tracking-[0.2em] text-emerald-300`}>
+              {seasonLabel}
+            </p>
+          )}
 
           <div className="mt-8">{crest}</div>
           <p className={`${bebas.className} mt-4 text-3xl tracking-wide text-white`}>
@@ -232,6 +239,11 @@ export function PickClubFlow({
           Choose Your Club
           <InfoTip text="Pick the club you'll manage. Draft order is rolled randomly on the next screen." />
         </h1>
+        {seasonLabel && (
+          <p className={`${bebas.className} mt-2 text-xl tracking-[0.2em] text-emerald-300`}>
+            {seasonLabel}
+          </p>
+        )}
 
         {Array.from(byLeague.entries()).map(([league, leagueClubs]) => (
           <div key={league} className="mt-8">

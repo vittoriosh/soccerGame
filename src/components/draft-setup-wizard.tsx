@@ -120,6 +120,7 @@ export function DraftSetupWizard({
     defaultFormationForMode(DEFAULT_GAME_MODE),
   );
   const [rules, setRules] = useState<ScoringRules>(DEFAULT_SCORING_RULES);
+  const [divisionsEnabled, setDivisionsEnabled] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -143,6 +144,7 @@ export function DraftSetupWizard({
   function chooseGameMode(mode: GameMode) {
     setGameMode(mode);
     setFormation(defaultFormationForMode(mode));
+    if (mode !== "sevens") setDivisionsEnabled(false);
     setError(null);
   }
 
@@ -251,6 +253,7 @@ export function DraftSetupWizard({
     formData.set("age", nextRules.age ? "1" : "0");
     formData.set("potential", nextRules.potential ? "1" : "0");
     formData.set("fit", nextRules.fit ? "1" : "0");
+    formData.set("divisionsEnabled", divisionsEnabled ? "1" : "0");
     startTransition(() => {
       startDraft(formData);
     });
@@ -484,6 +487,34 @@ export function DraftSetupWizard({
             </p>
 
             <div className="mx-auto mt-10 flex w-full max-w-md flex-col gap-4">
+              {gameMode === "sevens" && (
+                <button
+                  type="button"
+                  aria-pressed={divisionsEnabled}
+                  disabled={pending}
+                  onClick={() => setDivisionsEnabled((enabled) => !enabled)}
+                  className={`border-2 px-5 py-4 text-left transition disabled:opacity-50 ${
+                    divisionsEnabled
+                      ? "border-white bg-white text-black"
+                      : "border-white/50 bg-transparent text-white hover:border-white"
+                  }`}
+                >
+                  <span className="flex items-center justify-between gap-4">
+                    <span>
+                      <span className={`${bebas.className} block text-3xl tracking-wide`}>
+                        Season Divisions
+                      </span>
+                      <span className="mt-1 block text-sm leading-snug opacity-65">
+                        Start in Division 5. Top 20% go up, bottom 20% go down, and every
+                        higher division drafts smarter.
+                      </span>
+                    </span>
+                    <span className={`${bebas.className} shrink-0 text-xl tracking-[0.16em]`}>
+                      {divisionsEnabled ? "On" : "Off"}
+                    </span>
+                  </span>
+                </button>
+              )}
               <button
                 type="button"
                 disabled={pending}

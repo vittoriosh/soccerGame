@@ -46,6 +46,10 @@ const CHAPTERS: Chapter[] = [
     ],
     points: [
       {
+        label: "Season divisions",
+        text: "Turn the ladder on at setup to begin in Division 5. Finish in the top 20% to move up, the bottom 20% to move down, or the middle 60% to stay. Division 1 CPUs make the deepest, least noisy decisions.",
+      },
+      {
         label: "2-3-1 — balanced",
         text: "Width and midfield control, but your lone striker has to carry the attack.",
       },

@@ -12,6 +12,10 @@ import {
 } from "@/lib/scoring-rules";
 import { normalizeGameMode } from "@/lib/game-mode";
 import {
+  divisionDifficulty,
+  type DivisionDifficultyProfile,
+} from "@/lib/season-divisions";
+import {
   FIT_CHEMISTRY_MOD,
   FIT_RATING_PENALTY,
   FIT_TIERS,
@@ -218,9 +222,6 @@ type Candidate = {
 // both far fewer round trips across a 300-pick draft AND a much wider view
 // than the pick-by-pick top ten it replaces — the CPU can now see that a
 // position is thin three rounds before it runs out.
-const BOARD_SIZE = 24;
-const BOARD_FETCH = 80;
-
 // Chemistry is measured in chemistry points, the rating is in rating
 // points; one chemistry point is worth roughly this much rating through
 // computeEffectiveRating's potential pull, so the CPU can add the two up
@@ -276,13 +277,23 @@ type Temperament = {
   patience: number;
 };
 
-function temperamentFor(teamId: number): Temperament {
+function temperamentFor(
+  teamId: number,
+  difficulty: DivisionDifficultyProfile,
+): Temperament {
   const r = mulberry32(teamId * 2654435761);
-  return {
+  const personality = {
     chem: 0.35 + r() * 1.5,
     upside: r() * 0.75,
     scoutNoise: 0.4 + r() * 1.4,
     patience: 0.6 + r() * 0.8,
+  };
+  const focus = difficulty.strategyBlend;
+  return {
+    chem: personality.chem * (1 - focus) + focus,
+    upside: personality.upside * (1 - focus) + 0.55 * focus,
+    scoutNoise: personality.scoutNoise * difficulty.scoutingNoiseMultiplier,
+    patience: personality.patience * (1 - focus) + focus,
   };
 }
 
@@ -338,6 +349,10 @@ export async function advanceDraft(draftId: number) {
   const multiLeague = leagues.length > 1;
   const rules = scoringRulesFromDraft(draft);
   const gameMode = normalizeGameMode(draft.gameMode);
+  const difficulty = divisionDifficulty(
+    draft.division,
+    gameMode === "sevens" && draft.divisionsEnabled,
+  );
   const benchPicks = benchPicksForMode(gameMode);
   const rounds = roundsForRules(rules, gameMode);
   const teams = await prisma.team.findMany({
@@ -410,7 +425,7 @@ export async function advanceDraft(draftId: number) {
       clubCounts,
       nationCounts,
       hasCoach: teamsWithCoach.has(team.id),
-      temperament: temperamentFor(team.id),
+      temperament: temperamentFor(team.id, difficulty),
     });
   }
 
@@ -422,11 +437,13 @@ export async function advanceDraft(draftId: number) {
         where: { positionGroup: group, league: { in: leagues }, year: { in: years } },
         select: CANDIDATE_SELECT,
         orderBy: { overall: "desc" },
-        take: BOARD_FETCH,
+        take: difficulty.boardFetch,
       });
       boards.set(
         group,
-        rows.filter((candidate) => !draftedPlayerIds.has(candidate.id)).slice(0, BOARD_SIZE),
+        rows
+          .filter((candidate) => !draftedPlayerIds.has(candidate.id))
+          .slice(0, difficulty.boardSize),
       );
     }),
   );
@@ -529,6 +546,17 @@ export async function advanceDraft(draftId: number) {
       return value * temperament.chem;
     }
 
+    function ageValue(candidate: Candidate): number {
+      if (!rules.age || difficulty.strategyBlend === 0) return 0;
+      const value =
+        candidate.age >= 24 && candidate.age <= 29
+          ? 0.2
+          : candidate.age < 20 || candidate.age > 34
+            ? -0.25
+            : 0;
+      return value * difficulty.strategyBlend;
+    }
+
     /** One candidate in one slot, in rating points, exactly as the final
      *  team rating will eventually see it. */
     function valueInSlot(candidate: Candidate, slot: FormationSlot): number | null {
@@ -544,6 +572,7 @@ export async function advanceDraft(draftId: number) {
         (rules.fit ? FIT_RATING_PENALTY[fit] : 0) +
         chem * CHEM_POINT_VALUE +
         upside +
+        ageValue(candidate) +
         scoutingOpinion(teamId, candidate.id) * temperament.scoutNoise
       );
     }
@@ -598,6 +627,7 @@ export async function advanceDraft(draftId: number) {
                 (rules.potential
                   ? Math.max(0, candidate.potential - candidate.overall) * temperament.upside * 0.3
                   : 0) +
+                ageValue(candidate) +
                 scoutingOpinion(teamId, candidate.id) * temperament.scoutNoise,
             }))
             .sort((a, b) => b.value - a.value);

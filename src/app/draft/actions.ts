@@ -16,6 +16,7 @@ import {
 } from "@/lib/formations";
 import { normalizeGameMode } from "@/lib/game-mode";
 import { scoringRulesFromForm } from "@/lib/scoring-rules";
+import { STARTING_DIVISION } from "@/lib/season-divisions";
 
 export async function startDraft(formData: FormData) {
   const leagues = formData.getAll("leagues").map(String).filter(Boolean);
@@ -66,6 +67,8 @@ export async function startDraft(formData: FormData) {
       ? requestedFormation.key
       : defaultFormationForMode(gameMode);
   const rules = scoringRulesFromForm(formData);
+  const divisionsEnabled =
+    gameMode === "sevens" && String(formData.get("divisionsEnabled") ?? "0") === "1";
 
   // Clubs and coaches are read outside the transaction: they're pure reads
   // against the shared Player table, and holding a SQLite write transaction
@@ -96,6 +99,9 @@ export async function startDraft(formData: FormData) {
         years: years.join(","),
         formation,
         gameMode,
+        divisionsEnabled,
+        division: STARTING_DIVISION,
+        seasonNumber: 1,
         cardPacksEnabled: false,
         chemistryEnabled: rules.chemistry,
         coachEnabled: rules.coach,

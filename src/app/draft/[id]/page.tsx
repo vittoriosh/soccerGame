@@ -9,8 +9,6 @@ import { POSITION_GROUPS } from "@/lib/positions";
 import {
   FIT_LABELS,
   FIT_TIERS,
-  assignSquadToFormation,
-  getFormation,
   positionFit,
   type Fit,
   type Formation,
@@ -23,18 +21,15 @@ import { DraftLiveFactors } from "@/components/draft-live-factors";
 import { DraftLiveLayout } from "@/components/draft-live-layout";
 import { StadiumShell } from "@/components/stadium-shell";
 import { bebas } from "@/lib/game-fonts";
-import { computeSquadRating, slotEffectiveRating, SLOT_NEUTRAL_CHEM } from "@/lib/team-rating";
-import {
-  computeSquadChemistry,
-  applyCoachChemistryBoost,
-  averageChemistry,
-} from "@/lib/chemistry";
+import { slotEffectiveRating } from "@/lib/team-rating";
+import { evaluateSquad } from "@/lib/squad-evaluation";
 import {
   benchPicksForMode,
   scoringRulesFromDraft,
   type ScoringRules,
 } from "@/lib/scoring-rules";
 import { gameModeConfig } from "@/lib/game-mode";
+import { seasonOutcome } from "@/lib/season-divisions";
 import { makePick, makeCoachPick } from "./actions";
 
 const PAGE_SIZE = 8;
@@ -111,54 +106,6 @@ const FIT_TEXT: Record<Fit, string> = {
   outOfPosition: "text-orange-400",
   emergency: "text-red-400",
 };
-
-/**
- * A squad is only ever as good as where its players are standing, so every
- * rating on this page comes from one place: place the picks into the team's
- * locked formation, score the links between neighbouring slots, then rate
- * each slot on how well its occupant actually fits it.
- */
-function evaluateSquad(
-  formationKey: string,
-  picks: SquadPick[],
-  coachRating: number | undefined,
-  rules: ScoringRules,
-) {
-  const formation = getFormation(formationKey);
-  const { starters, bench } = assignSquadToFormation(
-    picks.map((pick) => ({ player: pick.player, slotId: pick.slotId })),
-    formation,
-  );
-
-  const slotByPlayer = new Map<number, string>();
-  for (const [slotId, player] of starters) slotByPlayer.set(player.id, slotId);
-
-  const squadPlayers = [...starters.values(), ...bench];
-  const base = computeSquadChemistry(
-    squadPlayers.map((player) => ({
-      id: player.id,
-      club: player.club,
-      league: player.league,
-      nationality: player.nationality,
-      positions: player.positions,
-      slotId: slotByPlayer.get(player.id) ?? null,
-    })),
-    formation,
-  );
-  const chemistry = rules.chemistry
-    ? applyCoachChemistryBoost(base, rules.coach ? coachRating : undefined)
-    : new Map(squadPlayers.map((player) => [player.id, SLOT_NEUTRAL_CHEM]));
-  const rating = computeSquadRating({
-    formation,
-    starters,
-    bench,
-    chemistry,
-    coachRating,
-    rules,
-  });
-
-  return { formation, starters, bench, chemistry, rating, teamChemistry: averageChemistry(chemistry) };
-}
 
 function occupantsFor<T extends SquadPick["player"]>(
   formation: Formation,
@@ -396,6 +343,10 @@ export default async function DraftBoardPage({
       .sort((a, b) => b.rating - a.rating);
 
     const myRank = leaderboard.findIndex((t) => t.team.id === draft.userTeamId) + 1;
+    const divisionOutcome =
+      draft.gameMode === "sevens" && draft.divisionsEnabled
+        ? seasonOutcome(myRank, leaderboard.length, draft.division)
+        : null;
 
     const completeLines = POSITION_GROUPS.map((group) => {
       const yours = unified.lines.find((l) => l.group === group)?.effectiveAvg ?? 0;
@@ -436,6 +387,7 @@ export default async function DraftBoardPage({
     return (
       <StadiumShell fill>
         <DraftCompleteFlow
+          draftId={draftId}
           clubName={userTeam.shortName}
           formationKey={userTeam.formation}
           rank={myRank}
@@ -466,6 +418,18 @@ export default async function DraftBoardPage({
           hindsight={hindsight}
           rules={rules}
           packsHref={draft.cardPacksEnabled ? `/draft/${draftId}/packs` : undefined}
+          season={
+            divisionOutcome
+              ? {
+                  number: draft.seasonNumber,
+                  division: draft.division,
+                  outcomeLabel: divisionOutcome.label,
+                  movement: divisionOutcome.movement,
+                  promotionMaxRank: divisionOutcome.promotionMaxRank,
+                  relegationMinRank: divisionOutcome.relegationMinRank,
+                }
+              : null
+          }
         />
       </StadiumShell>
     );
@@ -618,7 +582,9 @@ export default async function DraftBoardPage({
             <span
               className={`${bebas.className} hidden truncate text-lg tracking-[0.2em] text-white/40 sm:inline`}
             >
-              {me.formation.name}
+              {draft.divisionsEnabled && draft.gameMode === "sevens"
+                ? `Division ${draft.division} · Season ${draft.seasonNumber}`
+                : me.formation.name}
             </span>
           </div>
           <div className="flex items-center gap-4 sm:gap-5">

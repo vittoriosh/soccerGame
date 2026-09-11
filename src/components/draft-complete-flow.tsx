@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { bebas, barlow } from "@/lib/game-fonts";
 import { SlotPitch, type SlotOccupant } from "@/components/slot-pitch";
 import { getFormation, type Formation } from "@/lib/formations";
 import type { PositionGroup } from "@/lib/positions";
 import { DEFAULT_SCORING_RULES, type ScoringRules } from "@/lib/scoring-rules";
+import { startNextSeason } from "@/app/draft/[id]/actions";
 
 type Step = "squad" | "lines" | "hindsight" | "result";
 
@@ -73,6 +74,8 @@ export function DraftCompleteFlow({
   hindsight = null,
   rules = DEFAULT_SCORING_RULES,
   packsHref,
+  draftId,
+  season = null,
 }: {
   clubName: string;
   formationKey: string;
@@ -88,10 +91,20 @@ export function DraftCompleteFlow({
   hindsight?: Hindsight | null;
   rules?: ScoringRules;
   packsHref?: string;
+  draftId: number;
+  season?: {
+    number: number;
+    division: number;
+    outcomeLabel: string;
+    movement: "promoted" | "relegated" | "held";
+    promotionMaxRank: number;
+    relegationMinRank: number;
+  } | null;
 }) {
   const [step, setStep] = useState<Step>("squad");
   const [lineIndex, setLineIndex] = useState(0);
   const [viewTeamId, setViewTeamId] = useState<number | null>(null);
+  const [seasonPending, startSeasonTransition] = useTransition();
 
   const formation: Formation = getFormation(formationKey);
   const occupantMap = new Map(occupants.map((o) => [o.slotId, o.player]));
@@ -102,6 +115,14 @@ export function DraftCompleteFlow({
   const currentLine = lineByGroup.get(currentLineMeta.group);
 
   const viewedTeam = teams.find((t) => t.teamId === viewTeamId) ?? null;
+
+  function playNextSeason() {
+    const formData = new FormData();
+    formData.set("draftId", String(draftId));
+    startSeasonTransition(() => {
+      startNextSeason(formData);
+    });
+  }
 
   function goNext() {
     if (step === "squad") {
@@ -210,7 +231,9 @@ export function DraftCompleteFlow({
         {step === "squad" && (
           <>
             <p className={`${bebas.className} text-sm tracking-[0.35em] text-white/55`}>
-              Your {starterCount} · {formation.name}
+              {season
+                ? `Season ${season.number} · Division ${season.division}`
+                : `Your ${starterCount} · ${formation.name}`}
             </p>
             <h1 className={`${bebas.className} mt-2 text-5xl tracking-wide text-white sm:text-6xl`}>
               {clubName}
@@ -324,7 +347,9 @@ export function DraftCompleteFlow({
         {step === "result" && (
           <>
             <p className={`${bebas.className} text-sm tracking-[0.35em] text-white/55`}>
-              Draft Complete · {formation.name}
+              {season
+                ? `Season ${season.number} Complete · Division ${season.division}`
+                : `Draft Complete · ${formation.name}`}
             </p>
             <h1 className={`${bebas.className} mt-2 text-5xl tracking-wide text-white sm:text-6xl`}>
               {clubName}
@@ -333,6 +358,25 @@ export function DraftCompleteFlow({
               #{rank}
               <span className="text-2xl text-white/40"> / {fieldSize}</span>
             </p>
+            {season && (
+              <div className="mx-auto mt-5 max-w-md">
+                <p
+                  className={`${bebas.className} text-3xl tracking-wide ${
+                    season.movement === "promoted"
+                      ? "text-emerald-300"
+                      : season.movement === "relegated"
+                        ? "text-amber-300"
+                        : "text-white"
+                  }`}
+                >
+                  {season.outcomeLabel}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-white/50">
+                  Promotion: #{season.promotionMaxRank} or better · Relegation: #
+                  {season.relegationMinRank} or lower
+                </p>
+              </div>
+            )}
 
             <div className={`mx-auto mt-8 grid w-full max-w-md gap-3 ${rules.chemistry || rules.fit ? "grid-cols-3" : "grid-cols-1"}`}>
               <div className="border-2 border-white bg-black/55 px-3 py-4">
@@ -417,12 +461,22 @@ export function DraftCompleteFlow({
         )}
         {step === "result" && (
           <>
+            {season && (
+              <button
+                type="button"
+                onClick={playNextSeason}
+                disabled={seasonPending}
+                className={`${primaryBtn} disabled:opacity-60`}
+              >
+                {seasonPending ? "Starting…" : "Play next season →"}
+              </button>
+            )}
             {packsHref && (
               <Link href={packsHref} className={secondaryBtn}>
                 Card Packs
               </Link>
             )}
-            <Link href="/" className={primaryBtn}>
+            <Link href="/" className={season ? secondaryBtn : primaryBtn}>
               Menu
             </Link>
           </>

@@ -53,6 +53,11 @@ export default async function PickTeamPage({
         chosenClub={chosenClub}
         revealedPick={revealedPick}
         teamCount={teams.length}
+        seasonLabel={
+          draft.divisionsEnabled
+            ? `Season ${draft.seasonNumber} · Division ${draft.division}`
+            : null
+        }
       />
     </StadiumShell>
   );
