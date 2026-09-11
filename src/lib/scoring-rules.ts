@@ -110,7 +110,7 @@ export function scoringRulesFromDraft(draft: {
   };
 }
 
-/** 11 starters + 4 bench. Coach is an extra round only when it counts. */
+/** Legacy constants retained for old scripts. Live drafts use mode config. */
 export const PLAYER_PICKS_PER_TEAM = 15;
 export const BENCH_PICKS = 4;
 

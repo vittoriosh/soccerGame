@@ -3,9 +3,10 @@ import { Prisma } from "../src/generated/prisma/client";
 import { createDraft, availablePlayerYears } from "../src/lib/create-draft";
 import { divisionScope, rollDivisionYears } from "../src/lib/season-divisions";
 import { DEFAULT_SCORING_RULES } from "../src/lib/scoring-rules";
-import { DEFAULT_SEVENS_FORMATION_KEY } from "../src/lib/formations";
+import { DEFAULT_FORMATION_KEY, DEFAULT_SEVENS_FORMATION_KEY } from "../src/lib/formations";
 import { shuffled } from "../src/lib/league-data";
 import { advanceDraft, roundsForDraft } from "../src/lib/draft";
+import { recordCareerResult } from "../src/lib/career-leaderboard";
 
 async function main() {
   // `drop <id>` removes a draft this script created, so a kept fixture can
@@ -17,6 +18,7 @@ async function main() {
   }
 
   const keep = process.argv.includes("--keep");
+  const eleven = process.argv.includes("--11");
   const division = Number(process.argv[2] ?? 5);
   const scope = divisionScope(division);
   const years = rollDivisionYears(division, await availablePlayerYears());
@@ -27,8 +29,10 @@ async function main() {
     leagues: scope.leagues,
     years,
     totalTeams: scope.teamCount,
-    formation: DEFAULT_SEVENS_FORMATION_KEY,
-    gameMode: "career",
+    formation: eleven ? DEFAULT_FORMATION_KEY : DEFAULT_SEVENS_FORMATION_KEY,
+    gameMode: eleven ? "career11" : "career",
+    username: "Smoke Test",
+    careerKey: `smoke-${Date.now()}`,
     rules: DEFAULT_SCORING_RULES,
     divisionsEnabled: true,
     division,
@@ -99,6 +103,14 @@ async function main() {
     console.log(`  ${playerPicks} player picks + ${coachPicks} coach picks`);
     if (state.status !== "complete") console.log("  WARNING: draft did not finish");
     if (coachPicks !== teams.length) console.log("  WARNING: not every club hired a coach");
+    await prisma.draft.update({
+      where: { id: draftId },
+      data: { userTeamId: teams[0].id },
+    });
+    await recordCareerResult(draftId);
+    const result = await prisma.careerResult.findUnique({ where: { draftId } });
+    console.log(`  leaderboard result: ${result?.username} ${result?.teamScore}`);
+    if (!result) console.log("  WARNING: leaderboard result missing");
     await cleanup(draftId);
     console.log("cleaned up");
     return;
@@ -118,6 +130,7 @@ async function main() {
 }
 
 async function cleanup(draftId: number) {
+  await prisma.careerResult.deleteMany({ where: { draftId } });
   await prisma.draft.update({ where: { id: draftId }, data: { userTeamId: null } });
   await prisma.coachPick.deleteMany({ where: { draftId } });
   await prisma.draftPick.deleteMany({ where: { draftId } });

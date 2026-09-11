@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { MAX_TEAMS_PER_LEAGUE, distributeTeamsAcrossLeagues } from "@/lib/league-data";
 import { defaultFormationForMode, getFormation } from "@/lib/formations";
-import { formationModeFor, normalizeGameMode } from "@/lib/game-mode";
+import { formationModeFor, isCareerMode, normalizeGameMode } from "@/lib/game-mode";
 import { scoringRulesFromForm } from "@/lib/scoring-rules";
 import {
   STARTING_DIVISION,
@@ -11,10 +11,11 @@ import {
   rollDivisionYears,
 } from "@/lib/season-divisions";
 import { availablePlayerYears, createDraft } from "@/lib/create-draft";
+import { newCareerKey, normalizeUsername } from "@/lib/career";
 
 export async function startDraft(formData: FormData) {
   const gameMode = normalizeGameMode(String(formData.get("gameMode") ?? ""));
-  const career = gameMode === "career";
+  const career = isCareerMode(gameMode);
 
   // Locked for the rest of the draft — every pick is judged against these
   // roles, so it can't be changed once players are off the board.
@@ -33,6 +34,7 @@ export async function startDraft(formData: FormData) {
   // Career skips the setup knobs entirely: the division decides the
   // leagues, the field size and which years get rolled into the pool.
   if (career) {
+    const username = normalizeUsername(formData.get("username"));
     const scope = divisionScope(STARTING_DIVISION);
     const draftId = await createDraft({
       leagues: scope.leagues,
@@ -40,6 +42,8 @@ export async function startDraft(formData: FormData) {
       totalTeams: scope.teamCount,
       formation,
       gameMode,
+      username,
+      careerKey: newCareerKey(),
       rules,
       divisionsEnabled: true,
       division: STARTING_DIVISION,

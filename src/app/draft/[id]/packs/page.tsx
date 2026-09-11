@@ -7,6 +7,7 @@ import { groupLabel, type PositionGroup } from "@/lib/positions";
 import { cardTierBorderClass } from "@/lib/card-tier";
 import { getUnresolvedPacks, getTradeInsUsed, MAX_TRADE_INS } from "@/lib/card-packs";
 import { tradeIn, openPack } from "./actions";
+import { packsEnabled } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export default async function CardPacksPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  if (!packsEnabled()) redirect("/draft");
   const { id } = await params;
   const draftId = Number.parseInt(id, 10);
   if (!draftId) notFound();

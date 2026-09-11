@@ -4,8 +4,10 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { ROUNDS } from "@/lib/draft";
 import { tradeInPlayersForPacks, choosePackPlayer } from "@/lib/card-packs";
+import { assertPacksEnabled } from "@/lib/features";
 
 export async function tradeIn(formData: FormData) {
+  assertPacksEnabled();
   const draftId = Number.parseInt(String(formData.get("draftId")), 10);
   const tradedPlayerIds = formData
     .getAll("tradedPlayerIds")
@@ -26,6 +28,7 @@ export async function tradeIn(formData: FormData) {
 }
 
 export async function openPack(formData: FormData) {
+  assertPacksEnabled();
   const draftId = Number.parseInt(String(formData.get("draftId")), 10);
   const packId = Number.parseInt(String(formData.get("packId")), 10);
   const chosenPlayerId = Number.parseInt(String(formData.get("chosenPlayerId")), 10);

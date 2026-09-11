@@ -1,10 +1,13 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { PACK_TIERS, STARTING_CASH } from "@/lib/packs";
 import { StadiumShell } from "@/components/stadium-shell";
 import { bebas } from "@/lib/game-fonts";
 import { startPackRun } from "./actions";
+import { packsEnabled } from "@/lib/features";
 
 export default function PacksLandingPage() {
+  if (!packsEnabled()) redirect("/draft");
   return (
     <StadiumShell align="center">
       <div className="flex w-full max-w-2xl flex-col items-center text-center">

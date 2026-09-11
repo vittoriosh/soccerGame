@@ -5,8 +5,8 @@ import { bebas } from "@/lib/game-fonts";
 const menuLinks = [
   { href: "/how-to-play", label: "How To Play" },
   { href: "/players", label: "Players" },
-  { href: "/draft", label: "Draft" },
-  { href: "/packs", label: "Packs" },
+  { href: "/draft", label: "Career & Custom Game" },
+  { href: "/leaderboard", label: "Leaderboard" },
 ] as const;
 
 export default function Home() {

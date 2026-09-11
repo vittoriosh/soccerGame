@@ -385,7 +385,7 @@ export default async function DraftBoardPage({
     });
 
     return (
-      <StadiumShell fill>
+      <StadiumShell scrollable>
         <DraftCompleteFlow
           draftId={draftId}
           clubName={userTeam.shortName}
@@ -417,7 +417,11 @@ export default async function DraftBoardPage({
           }))}
           hindsight={hindsight}
           rules={rules}
-          packsHref={draft.cardPacksEnabled ? `/draft/${draftId}/packs` : undefined}
+          leaderboardHref={
+            divisionOutcome
+              ? `/leaderboard?mode=${draft.gameMode}&division=${draft.division}&returnTo=${encodeURIComponent(`/draft/${draftId}`)}`
+              : undefined
+          }
           season={
             divisionOutcome
               ? {

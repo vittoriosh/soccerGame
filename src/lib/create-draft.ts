@@ -25,6 +25,8 @@ export type CreateDraftArgs = {
   divisionsEnabled: boolean;
   division: number;
   seasonNumber: number;
+  username?: string | null;
+  careerKey?: string | null;
   previousSeasonDraftId?: number | null;
   cardPacksEnabled?: boolean;
   keepClub?: KeptClub | null;
@@ -162,6 +164,8 @@ export async function createDraft(args: CreateDraftArgs): Promise<number> {
           years: years.join(","),
           formation: args.formation,
           gameMode,
+          username: args.username ?? null,
+          careerKey: args.careerKey ?? null,
           divisionsEnabled: args.divisionsEnabled,
           division: args.division,
           seasonNumber: args.seasonNumber,

@@ -11,6 +11,7 @@ import {
   scoringRulesFromDraft,
 } from "@/lib/scoring-rules";
 import { normalizeGameMode, supportsDivisions } from "@/lib/game-mode";
+import { recordCareerResult } from "@/lib/career-leaderboard";
 import {
   divisionDifficulty,
   type DivisionDifficultyProfile,
@@ -27,7 +28,7 @@ import {
   type FormationSlot,
 } from "@/lib/formations";
 
-/** Default rounds when the coach counts: 15 player picks + 1 coach. */
+/** Legacy pack trade marker. Live draft length is always mode-aware. */
 export const ROUNDS = 16;
 
 export function roundsForDraft(draft: {
@@ -366,10 +367,12 @@ export async function advanceDraft(draftId: number) {
   const teamByOrder = new Map(teams.map((team) => [team.draftOrder, team]));
   const totalPicks = teamCount * rounds;
   if (draft.currentPick > totalPicks) {
-    return prisma.draft.update({
+    const completed = await prisma.draft.update({
       where: { id: draftId },
       data: { status: "complete" },
     });
+    await recordCareerResult(draftId);
+    return completed;
   }
 
   const onTheClock = teams.find(
@@ -728,8 +731,10 @@ export async function advanceDraft(draftId: number) {
   }
 
   const status = currentPick > totalPicks ? "complete" : "in_progress";
-  return prisma.draft.update({
+  const updated = await prisma.draft.update({
     where: { id: draftId },
     data: { currentPick, status },
   });
+  if (status === "complete") await recordCareerResult(draftId);
+  return updated;
 }

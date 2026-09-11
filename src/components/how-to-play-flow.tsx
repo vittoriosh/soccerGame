@@ -23,8 +23,8 @@ const CHAPTERS: Chapter[] = [
     lead: "One shared board, everyone filling the same-size team sheet. The order snakes — whoever picks last in a round picks first in the next, so a late slot pays you back straight away.",
     points: [
       {
-        label: "Classic: sixteen picks",
-        text: "Eleven starters, four on the bench, one coach. No trades, no waivers.",
+        label: "Career 11s: twelve picks",
+        text: "Eleven starters and one coach. There are no substitute rounds.",
       },
       {
         label: "Gone is gone",
@@ -38,7 +38,7 @@ const CHAPTERS: Chapter[] = [
   },
   {
     title: "7s",
-    lead: "Seven-a-side is a shorter draft, not an easier rating. Seven starters carry the same 86% that eleven do in Classic, so every weak slot hurts more.",
+    lead: "Career 7s is a shorter draft, not an easier rating. Seven starters and two substitutes leave less room to hide a weak slot.",
     tiles: [
       { label: "Starters", value: "7", note: "86% total" },
       { label: "Bench", value: "2", note: "6% total" },
@@ -46,8 +46,8 @@ const CHAPTERS: Chapter[] = [
     ],
     points: [
       {
-        label: "Season divisions",
-        text: "Turn the ladder on at setup to begin in Division 5. Finish in the top 20% to move up, the bottom 20% to move down, or the middle 60% to stay. Division 1 CPUs make the deepest, least noisy decisions.",
+        label: "Career divisions",
+        text: "Both careers begin in Division 5. Finish in the top 20% to move up, the bottom 20% to move down, or the middle 60% to stay. Division 1 CPUs make the deepest, least noisy decisions.",
       },
       {
         label: "2-3-1 — balanced",
@@ -69,11 +69,11 @@ const CHAPTERS: Chapter[] = [
   },
   {
     title: "Your Shape",
-    lead: "You lock a formation before the draft and never change it. The starting slots split most of your rating equally, so the shape decides where your rating gets spent.",
+    lead: "You lock a formation before the draft and never change it. Career 11s is only the starting XI plus a coach; Career 7s also drafts two substitutes.",
     tiles: [
-      { label: "Starting XI", value: "86%", note: "11 equal slots" },
-      { label: "Coach", value: "8%", note: "one pick" },
-      { label: "Bench", value: "6%", note: "four picks" },
+      { label: "Starting XI", value: "11", note: "equal slots" },
+      { label: "Coach", value: "1", note: "final round" },
+      { label: "11s Subs", value: "0", note: "starting XI only" },
     ],
     points: [
       {
@@ -83,10 +83,6 @@ const CHAPTERS: Chapter[] = [
       {
         label: "No hiding a bad pick",
         text: "The shape cannot move to cover a position you lost on the board, so pick a formation you can actually fill.",
-      },
-      {
-        label: "The bench is not dead time",
-        text: "Four picks share 6% — roughly a fifth of a starting slot each.",
       },
     ],
   },

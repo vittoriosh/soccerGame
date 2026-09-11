@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { clubLogoSrc } from "@/lib/player-image";
 import { groupByPosition, STARTER_CAPS, type PositionGroup } from "@/lib/positions";
@@ -26,6 +26,7 @@ import {
   type CardColor,
 } from "@/lib/packs";
 import { resolveOpening, resolveCoachOpening, skipOpening } from "./actions";
+import { packsEnabled } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,7 @@ export default async function PackRunPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  if (!packsEnabled()) redirect("/draft");
   const { id } = await params;
   const packRunId = Number.parseInt(id, 10);
   if (!packRunId) notFound();

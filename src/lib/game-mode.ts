@@ -1,16 +1,23 @@
-export type GameMode = "classic" | "sevens" | "career";
+export type GameMode = "classic" | "sevens" | "career" | "career11";
 
 export const DEFAULT_GAME_MODE: GameMode = "classic";
 
 export function normalizeGameMode(value: string | null | undefined): GameMode {
   if (value === "sevens") return "sevens";
   if (value === "career") return "career";
+  if (value === "career11") return "career11";
   return DEFAULT_GAME_MODE;
 }
 
-/** Career is 7s on a ladder, so it shares every formation and squad rule. */
+export function isCareerMode(value: string | null | undefined): boolean {
+  const mode = normalizeGameMode(value);
+  return mode === "career" || mode === "career11";
+}
+
+/** Career 7s shares 7s shapes; Career 11s shares full-size shapes. */
 export function formationModeFor(value: string | null | undefined): "classic" | "sevens" {
-  return normalizeGameMode(value) === "classic" ? "classic" : "sevens";
+  const mode = normalizeGameMode(value);
+  return mode === "classic" || mode === "career11" ? "classic" : "sevens";
 }
 
 export const GAME_MODE_CONFIG: Record<
@@ -24,11 +31,11 @@ export const GAME_MODE_CONFIG: Record<
   }
 > = {
   classic: {
-    label: "Classic 11s",
+    label: "Custom 11s",
     shortLabel: "11s",
     starters: 11,
-    bench: 4,
-    description: "The full tactical game: eleven starters and four substitutes.",
+    bench: 0,
+    description: "Eleven starters with your own leagues, years and scoring rules.",
   },
   sevens: {
     label: "7s",
@@ -45,6 +52,14 @@ export const GAME_MODE_CONFIG: Record<
     description:
       "7s on a ten-division ladder. Pick a club and a shape — the division sets the leagues, the years and how sharp your rivals are.",
   },
+  career11: {
+    label: "Career 11s",
+    shortLabel: "11s",
+    starters: 11,
+    bench: 0,
+    description:
+      "A starting XI with no substitutes on the same ten-division career ladder.",
+  },
 };
 
 export function gameModeConfig(value: string | null | undefined) {
@@ -58,5 +73,5 @@ export function playerPicksForMode(value: string | null | undefined): number {
 
 /** Career always runs the ladder; 7s can opt in; Classic never does. */
 export function supportsDivisions(value: string | null | undefined): boolean {
-  return normalizeGameMode(value) !== "classic";
+  return isCareerMode(value) || normalizeGameMode(value) === "sevens";
 }

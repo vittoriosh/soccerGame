@@ -10,7 +10,7 @@ import {
 } from "@/lib/formations";
 import {
   GAME_MODE_CONFIG,
-  DEFAULT_GAME_MODE,
+  isCareerMode,
   type GameMode,
 } from "@/lib/game-mode";
 import {
@@ -25,13 +25,15 @@ import {
   divisionScopeLabel,
 } from "@/lib/season-divisions";
 
-type Step = "mode" | "leagues" | "teams" | "years" | "formation" | "rules";
+type Step = "mode" | "profile" | "leagues" | "teams" | "years" | "formation" | "rules";
 
 const MAX_YEARS = 3;
 
 const STEP_INFO: Record<Step, string> = {
   mode:
-    "Classic fields eleven starters and four substitutes. 7s uses seven starters and two substitutes with its own tighter formations and shorter draft. Career 7s runs the division ladder and sets the leagues and years for you.",
+    "Career 7s and Career 11s use the ten-division ladder. Custom Game lets you choose the leagues, years, field size and scoring rules.",
+  profile:
+    "Your public display name appears beside your team score on each division leaderboard. It is not an account or login.",
   leagues:
     "Pick one or more leagues to draft from. Every league fields its real clubs; the Premier League also uses its real head coaches.",
   teams:
@@ -40,7 +42,7 @@ const STEP_INFO: Record<Step, string> = {
   formation:
     "Locked for the whole draft. Every starting slot counts equally, so the shape decides where you can afford to lose a battle. Natural positions gain rating and chemistry; anyone played out of position loses both.",
   rules:
-    "Classic is the full game — chemistry, coach, age, potential and fit all count, same as always. Edit opens a popup if you want to turn any of those off.",
+    "Custom games start with chemistry, coach, age, potential and fit enabled. Edit opens a popup if you want to turn any of them off.",
 };
 
 /** Dots on a mini pitch — enough to read a shape at a glance without
@@ -117,16 +119,16 @@ export function DraftSetupWizard({
 }) {
   const defaultYear = availableYears[0] ?? 2026;
   const [step, setStep] = useState<Step>("mode");
-  const [gameMode, setGameMode] = useState<GameMode>(DEFAULT_GAME_MODE);
+  const [gameMode, setGameMode] = useState<GameMode>("career");
+  const [username, setUsername] = useState("");
   const [selected, setSelected] = useState<string[]>([PREMIER_LEAGUE]);
   const [totalTeams, setTotalTeams] = useState(teamsPerLeagueDefault);
   const [showMore, setShowMore] = useState(false);
   const [selectedYears, setSelectedYears] = useState<number[]>([defaultYear]);
   const [formation, setFormation] = useState(
-    defaultFormationForMode(DEFAULT_GAME_MODE),
+    defaultFormationForMode("career"),
   );
   const [rules, setRules] = useState<ScoringRules>(DEFAULT_SCORING_RULES);
-  const [divisionsEnabled, setDivisionsEnabled] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -148,12 +150,11 @@ export function DraftSetupWizard({
   const availableFormations = formationsForMode(gameMode);
   // Career is the ladder: the division picks the leagues, the years and the
   // field size, so those three steps aren't yours to answer.
-  const career = gameMode === "career";
+  const career = isCareerMode(gameMode);
 
   function chooseGameMode(mode: GameMode) {
     setGameMode(mode);
     setFormation(defaultFormationForMode(mode));
-    if (mode !== "sevens") setDivisionsEnabled(false);
     setError(null);
   }
 
@@ -203,7 +204,21 @@ export function DraftSetupWizard({
 
   function goNext() {
     if (step === "mode") {
-      setStep(career ? "formation" : "leagues");
+      setStep(career ? "profile" : "leagues");
+      return;
+    }
+    if (step === "profile") {
+      const clean = username.replace(/\s+/g, " ").trim();
+      if (
+        clean.length < 2 ||
+        clean.length > 24 ||
+        !/^[\p{L}\p{N} _.-]+$/u.test(clean)
+      ) {
+        setError("Use 2–24 letters, numbers, spaces, _, . or -");
+        return;
+      }
+      setUsername(clean);
+      setStep("formation");
       return;
     }
     if (step === "leagues") {
@@ -229,7 +244,11 @@ export function DraftSetupWizard({
       return;
     }
     if (step === "formation") {
-      setStep("rules");
+      if (career) {
+        submit(DEFAULT_SCORING_RULES);
+      } else {
+        setStep("rules");
+      }
     }
   }
 
@@ -237,9 +256,10 @@ export function DraftSetupWizard({
     setError(null);
     setShowMore(false);
     if (step === "leagues") setStep("mode");
+    if (step === "profile") setStep("mode");
     if (step === "teams") setStep("leagues");
     if (step === "years") setStep("teams");
-    if (step === "formation") setStep(career ? "mode" : "years");
+    if (step === "formation") setStep(career ? "profile" : "years");
     if (step === "rules") {
       setEditOpen(false);
       setStep("formation");
@@ -253,6 +273,7 @@ export function DraftSetupWizard({
     }
     const formData = new FormData();
     formData.set("gameMode", gameMode);
+    if (career) formData.set("username", username);
     if (!career) {
       for (const league of selected) formData.append("leagues", league);
       for (const year of selectedYears) formData.append("years", String(year));
@@ -264,7 +285,7 @@ export function DraftSetupWizard({
     formData.set("age", nextRules.age ? "1" : "0");
     formData.set("potential", nextRules.potential ? "1" : "0");
     formData.set("fit", nextRules.fit ? "1" : "0");
-    formData.set("divisionsEnabled", divisionsEnabled ? "1" : "0");
+    formData.set("divisionsEnabled", "0");
     startTransition(() => {
       startDraft(formData);
     });
@@ -285,12 +306,29 @@ export function DraftSetupWizard({
               <InfoTip text={STEP_INFO.mode} />
             </h1>
             <div className="mx-auto mt-8 grid w-full max-w-4xl gap-3 sm:mt-10 sm:grid-cols-3">
-              {(Object.entries(GAME_MODE_CONFIG) as [GameMode, (typeof GAME_MODE_CONFIG)[GameMode]][]).map(
-                ([mode, config]) => {
-                  const on = gameMode === mode;
+              {(
+                [
+                  { key: "career", mode: "career", config: GAME_MODE_CONFIG.career },
+                  { key: "career11", mode: "career11", config: GAME_MODE_CONFIG.career11 },
+                  {
+                    key: "custom",
+                    mode: gameMode === "sevens" ? "sevens" : "classic",
+                    config: {
+                      label: "Custom Game",
+                      starters: gameMode === "sevens" ? 7 : 11,
+                      bench: gameMode === "sevens" ? 2 : 0,
+                      description: "Choose every league, year, club count, formation and scoring rule.",
+                    },
+                  },
+                ] as const
+              ).map(({ key, mode, config }) => {
+                  const on =
+                    key === "custom"
+                      ? gameMode === "classic" || gameMode === "sevens"
+                      : gameMode === mode;
                   return (
                     <button
-                      key={mode}
+                      key={key}
                       type="button"
                       onClick={() => chooseGameMode(mode)}
                       className={`border-2 px-5 py-6 text-left transition ${
@@ -303,16 +341,67 @@ export function DraftSetupWizard({
                         {config.label}
                       </span>
                       <span className="mt-2 block text-sm leading-relaxed opacity-65">
-                        {config.starters} starters · {config.bench} subs
+                        {config.starters} starters
+                        {config.bench > 0 ? ` · ${config.bench} subs` : " · no subs"}
                       </span>
                       <span className="mt-1 block text-sm leading-relaxed opacity-65">
                         {config.description}
                       </span>
                     </button>
                   );
-                },
-              )}
+                })}
             </div>
+            {(gameMode === "classic" || gameMode === "sevens") && (
+              <div className="mx-auto mt-4 grid w-full max-w-md grid-cols-2 gap-3">
+                {(["classic", "sevens"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => chooseGameMode(mode)}
+                    className={`${bebas.className} border-2 px-4 py-3 text-xl tracking-[0.12em] transition ${
+                      gameMode === mode
+                        ? "border-white bg-white text-black"
+                        : "border-white/40 bg-black/55 text-white"
+                    }`}
+                  >
+                    {mode === "classic" ? "Custom 11s" : "Custom 7s"}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {step === "profile" && (
+          <>
+            <h1
+              className={`${bebas.className} flex items-center justify-center text-4xl tracking-wide text-white sm:text-6xl`}
+            >
+              Enter Username
+              <InfoTip text={STEP_INFO.profile} />
+            </h1>
+            <p className={`${barlow.className} mx-auto mt-4 max-w-md text-sm text-white/55`}>
+              Your name and team score are recorded after every completed season.
+            </p>
+            <input
+              autoFocus
+              type="text"
+              minLength={2}
+              maxLength={24}
+              value={username}
+              onChange={(event) => {
+                setUsername(event.target.value);
+                setError(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") goNext();
+              }}
+              placeholder="Your username"
+              className={`${barlow.className} mx-auto mt-10 block w-full max-w-md border-2 border-white/55 bg-black/60 px-5 py-5 text-center text-2xl font-semibold text-white outline-none placeholder:text-white/25 focus:border-white`}
+            />
+            <p className={`${barlow.className} mt-3 text-xs text-white/40`}>
+              2–24 characters · letters, numbers, spaces, _, . and -
+            </p>
           </>
         )}
 
@@ -512,7 +601,7 @@ export function DraftSetupWizard({
                 ? "Full 7s rules are on, and the division ladder runs from the first whistle. Edit only if you want to turn factors off."
                 : gameMode === "sevens"
                   ? "Full 7s rules are on. Edit only if you want to turn factors off."
-                  : "Classic is the full game. Edit only if you want to turn factors off."}
+                  : "Full rules are on. Edit only if you want to turn factors off."}
             </p>
 
             <div className="mx-auto mt-10 flex w-full max-w-md flex-col gap-4">
@@ -528,34 +617,6 @@ export function DraftSetupWizard({
                     {STARTING_DIVISION}. Career always runs the ladder.
                   </span>
                 </div>
-              )}
-              {gameMode === "sevens" && (
-                <button
-                  type="button"
-                  aria-pressed={divisionsEnabled}
-                  disabled={pending}
-                  onClick={() => setDivisionsEnabled((enabled) => !enabled)}
-                  className={`border-2 px-5 py-4 text-left transition disabled:opacity-50 ${
-                    divisionsEnabled
-                      ? "border-white bg-white text-black"
-                      : "border-white/50 bg-transparent text-white hover:border-white"
-                  }`}
-                >
-                  <span className="flex items-center justify-between gap-4">
-                    <span>
-                      <span className={`${bebas.className} block text-3xl tracking-wide`}>
-                        Season Divisions
-                      </span>
-                      <span className="mt-1 block text-sm leading-snug opacity-65">
-                        Start in Division 5. Top 20% go up, bottom 20% go down, and every
-                        higher division drafts smarter.
-                      </span>
-                    </span>
-                    <span className={`${bebas.className} shrink-0 text-xl tracking-[0.16em]`}>
-                      {divisionsEnabled ? "On" : "Off"}
-                    </span>
-                  </span>
-                </button>
               )}
               <button
                 type="button"
@@ -593,9 +654,14 @@ export function DraftSetupWizard({
           <button
             type="button"
             onClick={goNext}
+            disabled={pending}
             className={`${bebas.className} col-start-2 min-h-14 border-2 border-white bg-white px-4 py-3 text-2xl tracking-[0.12em] text-black transition hover:bg-transparent hover:text-white sm:px-12 sm:py-5 sm:text-3xl`}
           >
-            Continue →
+            {pending
+              ? "Starting…"
+              : step === "formation" && career
+                ? `Start ${gameMode === "career11" ? "11s" : "7s"} Career →`
+                : "Continue →"}
           </button>
         )}
 
@@ -693,7 +759,7 @@ export function DraftSetupWizard({
                 onClick={() => setRules(DEFAULT_SCORING_RULES)}
                 className={`${bebas.className} border-2 border-white/50 bg-black/55 px-6 py-3 text-xl tracking-[0.12em] text-white transition hover:border-white`}
               >
-                Reset Classic
+                Reset Rules
               </button>
               <button
                 type="button"

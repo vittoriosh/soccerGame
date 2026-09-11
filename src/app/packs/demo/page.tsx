@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { clubLogoSrc } from "@/lib/player-image";
 import { POSITION_GROUPS, type PositionGroup } from "@/lib/positions";
@@ -12,6 +13,7 @@ import {
   type CardColor,
   type PackTierConfig,
 } from "@/lib/packs";
+import { packsEnabled } from "@/lib/features";
 
 // Demo-only — deliberately not in PACK_TIERS, so it's not purchasable (or
 // priced) anywhere in real gameplay, just something to look at here. Beats
@@ -88,6 +90,7 @@ export default async function PackDemoPage({
 }: {
   searchParams: Promise<{ tier?: string; group?: string; kind?: string; r?: string }>;
 }) {
+  if (!packsEnabled()) redirect("/draft");
   const { tier: tierParam, group: groupParam, kind: kindParam, r: rerollParam } =
     await searchParams;
   const tierKey = DEMO_TIERS.some((t) => t.key === tierParam) ? tierParam! : "diamond";

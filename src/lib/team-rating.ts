@@ -166,8 +166,8 @@ export function computeUnifiedRating(
  * on the front four, so the shape you locked in at setup decides which
  * positions you can afford to lose a battle for.
  *
- * The bench keeps a small slice: four picks that can't make the XI still
- * have to be worth making, or the last four rounds are dead time.
+ * Modes with a bench keep a small slice so those picks remain meaningful.
+ * Career and Custom 11s have no bench and normalise over XI + coach only.
  */
 const STARTER_SHARE = 0.86;
 const BENCH_SHARE = 0.06;
@@ -181,9 +181,7 @@ export function benchSlotWeight(benchCount: number): number {
 }
 
 const SLOT_WEIGHT = starterSlotWeight(STARTER_SLOTS);
-/** The four bench picks split BENCH_SHARE between them — so a bench pick is
- *  worth roughly a fifth of a starting slot, which is what stops the CPU
- *  from ever taking a backup over a starter. */
+/** Legacy four-player bench weight, retained for pack-mode calculations. */
 export const BENCH_SLOT_WEIGHT = benchSlotWeight(4);
 
 export type SquadPlayer = {
@@ -213,7 +211,7 @@ export type SlotRating = {
  *  3. chemistry, which is itself part links and part position fit
  *  4. the coach, a small fixed slice
  *  5. age balance across the squad
- *  6. bench depth, a small slice for the four non-starters
+ *  6. bench depth, only in modes that draft substitutes
  *
  * Weights are normalised over whatever is actually filled, so a rating
  * shown mid-draft stays on the same 1-99 scale as a finished squad instead

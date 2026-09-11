@@ -148,15 +148,20 @@ model Team {
 model Draft {
   id               Int      @id @default(autoincrement())
   userTeamId       Int?     @unique
+  /** Public display name for career leaderboards. This is deliberately not
+   *  authentication: separate careers may use the same name. */
+  username         String?
+  /** Stable id shared by every season in one career. */
+  careerKey        String?
   leagues          String   @default("Premier League")
   /** Comma-separated real-world player card years this draft can pull from
    *  (e.g. "2026" or "2023,2022,2021"). Up to 3 years, chosen at setup. */
   years            String   @default("2026")
   /** Chosen at setup and locked for the whole draft — see formations.ts. */
   formation        String   @default("4-3-3")
-  /** classic = 11 starters + 4 subs; sevens = 7 starters + 2 subs;
-   *  career = 7s with the division ladder always on, where the division
-   *  (not the player) decides the leagues, years and field size. */
+  /** classic = custom 11s; sevens = custom 7s; career = Career 7s;
+   *  career11 = Career 11s. Career modes use the division to decide the
+   *  leagues, years and field size. */
   gameMode         String   @default("classic")
   /** The 7s career ladder — opt-in for `sevens`, always on for `career`.
    *  New careers begin in Division 5 and each completed draft can create
@@ -184,8 +189,33 @@ model Draft {
   picks      DraftPick[]
   coachPicks CoachPick[]
   cardPacks  CardPack[]
+  careerResult CareerResult?
   previousSeason Draft? @relation("DraftSeasonChain", fields: [previousSeasonDraftId], references: [id])
   nextSeason     Draft? @relation("DraftSeasonChain")
+
+  @@index([careerKey])
+}
+
+/** Immutable public result for one completed career season. The unique
+ *  draftId makes recording idempotent when completion requests race. */
+model CareerResult {
+  id           Int      @id @default(autoincrement())
+  draftId      Int      @unique
+  careerKey    String
+  username     String
+  gameMode     String
+  division     Int
+  seasonNumber Int
+  teamName     String
+  teamScore    Float
+  fieldRank    Int
+  fieldSize    Int
+  createdAt    DateTime @default(now())
+
+  draft Draft @relation(fields: [draftId], references: [id])
+
+  @@index([gameMode, division, teamScore])
+  @@index([careerKey, seasonNumber])
 }
 
 /** Coaches are generated per-draft too, for the same reason as Team. */

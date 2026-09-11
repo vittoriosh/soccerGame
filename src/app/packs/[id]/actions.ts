@@ -12,8 +12,10 @@ import {
 } from "@/lib/packs";
 import { POSITION_GROUPS, STARTER_CAPS, type PositionGroup } from "@/lib/positions";
 import type { Prisma } from "@/generated/prisma/client";
+import { assertPacksEnabled } from "@/lib/features";
 
 async function assertCanBuy(packRunId: number, tierKey: string) {
+  assertPacksEnabled();
   const run = await prisma.packRun.findUniqueOrThrow({ where: { id: packRunId } });
   if (run.status !== "in_progress") throw new Error("This squad is already finished");
 
@@ -91,6 +93,7 @@ export async function buyCoachPack(formData: FormData) {
 }
 
 export async function resolveOpening(formData: FormData) {
+  assertPacksEnabled();
   const packRunId = Number.parseInt(String(formData.get("packRunId")), 10);
   const openingId = Number.parseInt(String(formData.get("openingId")), 10);
   const selectedPlayerIds = formData
@@ -139,6 +142,7 @@ export async function resolveOpening(formData: FormData) {
 }
 
 export async function resolveCoachOpening(formData: FormData) {
+  assertPacksEnabled();
   const packRunId = Number.parseInt(String(formData.get("packRunId")), 10);
   const openingId = Number.parseInt(String(formData.get("openingId")), 10);
   const selectedNameRaw = formData.get("selected");
@@ -175,6 +179,7 @@ export async function resolveCoachOpening(formData: FormData) {
 }
 
 export async function skipOpening(formData: FormData) {
+  assertPacksEnabled();
   const packRunId = Number.parseInt(String(formData.get("packRunId")), 10);
   const openingId = Number.parseInt(String(formData.get("openingId")), 10);
   await prisma.packOpening.delete({ where: { id: openingId } });

@@ -24,6 +24,7 @@ import {
   seasonOutcome,
 } from "@/lib/season-divisions";
 import { availablePlayerYears, createDraft, type KeptClub } from "@/lib/create-draft";
+import { isCareerMode } from "@/lib/game-mode";
 
 export async function makePick(formData: FormData) {
   const draftId = Number.parseInt(String(formData.get("draftId")), 10);
@@ -279,7 +280,10 @@ async function createCareerSeason(args: {
     years: rollDivisionYears(nextDivision, await availablePlayerYears()),
     totalTeams: scope.teamCount,
     formation: previous.formation,
-    gameMode: "career",
+    gameMode: previous.gameMode === "career11" ? "career11" : "career",
+    // Careers created before public profiles still remain playable.
+    username: previous.username ?? "Manager",
+    careerKey: previous.careerKey ?? `legacy-${previous.id}`,
     rules,
     divisionsEnabled: true,
     division: nextDivision,
@@ -315,7 +319,7 @@ export async function startNextSeason(formData: FormData) {
   if (!previous) throw new Error("Season not found");
   if (
     previous.status !== "complete" ||
-    (previous.gameMode !== "sevens" && previous.gameMode !== "career") ||
+    (previous.gameMode !== "sevens" && !isCareerMode(previous.gameMode)) ||
     !previous.divisionsEnabled ||
     !previous.userTeamId ||
     !previous.userTeam
@@ -381,7 +385,7 @@ export async function startNextSeason(formData: FormData) {
     // leagues, the years and the field size. The opt-in 7s ladder keeps the
     // exact same competition and just re-runs the draft.
     nextDraftId =
-      previous.gameMode === "career"
+      isCareerMode(previous.gameMode)
         ? await createCareerSeason({
             previous,
             rules,
