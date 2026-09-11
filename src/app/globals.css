@@ -116,6 +116,23 @@ select {
   animation: pick-roll-spin 0.16s ease-in-out infinite;
 }
 
+@keyframes cpu-wait-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+.cpu-wait-bar {
+  overflow: hidden;
+}
+
+.cpu-wait-bar > span {
+  animation: cpu-wait-slide 1.1s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

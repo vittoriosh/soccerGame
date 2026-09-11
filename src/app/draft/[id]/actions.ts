@@ -5,11 +5,11 @@ import { prisma } from "@/lib/db";
 import {
   advanceDraft,
   draftTotals,
-  getDraftedPlayerIds,
   getDraftedCoachIds,
   getTeamSquadState,
   parseDraftYears,
   pickInfo,
+  roundsForDraft,
   teamHasCoach,
 } from "@/lib/draft";
 import { FIT_TIERS, positionFit } from "@/lib/formations";
@@ -22,14 +22,25 @@ export async function makePick(formData: FormData) {
   const requestedSlot = String(formData.get("slotId") ?? "").trim();
   if (!draftId || !playerId) throw new Error("Missing draftId or playerId");
 
-  const draft = await prisma.draft.findUniqueOrThrow({ where: { id: draftId } });
+  const [draft, teams, alreadyTaken, player] = await Promise.all([
+    prisma.draft.findUniqueOrThrow({ where: { id: draftId } }),
+    prisma.team.findMany({
+      where: { draftId },
+      orderBy: { draftOrder: "asc" },
+    }),
+    prisma.draftPick.findFirst({
+      where: { draftId, playerId },
+      select: { id: true },
+    }),
+    prisma.player.findUniqueOrThrow({
+      where: { id: playerId },
+      select: { league: true, year: true, positions: true },
+    }),
+  ]);
   if (draft.status !== "in_progress") return;
 
-  const { teamCount, rounds } = await draftTotals(draftId);
-  const teams = await prisma.team.findMany({
-    where: { draftId },
-    orderBy: { draftOrder: "asc" },
-  });
+  const teamCount = teams.length;
+  const rounds = roundsForDraft(draft);
   const { round, draftOrder } = pickInfo(draft.currentPick, teamCount);
   const onTheClock = teams.find((t) => t.draftOrder === draftOrder);
 
@@ -41,15 +52,9 @@ export async function makePick(formData: FormData) {
     throw new Error("This is your last round — you must draft your coach now");
   }
 
-  const draftedIds = await getDraftedPlayerIds(draftId);
-  if (draftedIds.includes(playerId)) {
+  if (alreadyTaken) {
     throw new Error("Player already drafted");
   }
-
-  const player = await prisma.player.findUniqueOrThrow({
-    where: { id: playerId },
-    select: { league: true, year: true, positions: true },
-  });
 
   const leagues = draft.leagues.split(",");
   if (!leagues.includes(player.league)) {
@@ -88,21 +93,22 @@ export async function makePick(formData: FormData) {
     throw new Error("Fill your starting lineup before drafting bench players");
   }
 
-  await prisma.draftPick.create({
-    data: {
-      draftId,
-      pickNumber: draft.currentPick,
-      round,
-      teamId: onTheClock.id,
-      playerId,
-      slotId,
-    },
-  });
-
-  await prisma.draft.update({
-    where: { id: draftId },
-    data: { currentPick: draft.currentPick + 1 },
-  });
+  await prisma.$transaction([
+    prisma.draftPick.create({
+      data: {
+        draftId,
+        pickNumber: draft.currentPick,
+        round,
+        teamId: onTheClock.id,
+        playerId,
+        slotId,
+      },
+    }),
+    prisma.draft.update({
+      where: { id: draftId },
+      data: { currentPick: draft.currentPick + 1 },
+    }),
+  ]);
 
   await advanceDraft(draftId);
 

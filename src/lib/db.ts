@@ -12,6 +12,11 @@ function createPrismaClient() {
       "DATABASE_URL is not set. Use a Postgres connection string for local and Vercel.",
     );
   }
+  if (connectionString.startsWith("file:")) {
+    throw new Error(
+      "DATABASE_URL still points at SQLite. Set it to a postgres:// URL in .env, then restart the dev server.",
+    );
+  }
 
   // Driver adapter uses the Wasm query engine, so Vercel does not need the
   // missing rhel-openssl native binary that breaks custom-output deploys.

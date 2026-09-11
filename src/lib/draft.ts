@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/db";
-import { Prisma } from "@/generated/prisma/client";
 import { POSITION_GROUPS, STARTER_CAPS, STARTER_TOTAL, type PositionGroup } from "@/lib/positions";
 import {
   COACH_WEIGHT,
@@ -219,8 +218,8 @@ type Candidate = {
 // both far fewer round trips across a 300-pick draft AND a much wider view
 // than the pick-by-pick top ten it replaces — the CPU can now see that a
 // position is thin three rounds before it runs out.
-const BOARD_SIZE = 90;
-const BOARD_REFETCH_BELOW = 30;
+const BOARD_SIZE = 24;
+const BOARD_FETCH = 80;
 
 // Chemistry is measured in chemistry points, the rating is in rating
 // points; one chemistry point is worth roughly this much rating through
@@ -346,31 +345,38 @@ export async function advanceDraft(draftId: number) {
     orderBy: { draftOrder: "asc" },
   });
   const teamCount = teams.length;
+  const teamByOrder = new Map(teams.map((team) => [team.draftOrder, team]));
   const totalPicks = teamCount * rounds;
+  if (draft.currentPick > totalPicks) {
+    return prisma.draft.update({
+      where: { id: draftId },
+      data: { status: "complete" },
+    });
+  }
 
-  const draftedPlayerIds = new Set(await getDraftedPlayerIds(draftId));
-  const draftedCoachIds = new Set(await getDraftedCoachIds(draftId));
-  const teamsWithCoach = new Set(
-    (await prisma.coachPick.findMany({ where: { draftId }, select: { teamId: true } })).map(
-      (p) => p.teamId,
-    ),
+  const onTheClock = teams.find(
+    (team) => team.draftOrder === pickInfo(draft.currentPick, teamCount).draftOrder,
   );
+  // Page load calls this on every render. If it's already the user's turn,
+  // skip the heavy board work — otherwise the board hangs after every pick.
+  if (!onTheClock || onTheClock.id === draft.userTeamId) return draft;
 
-  // Every remaining coach, once — a draft only has a few dozen, so the CPU
-  // can see the whole coach market and judge whether waiting is safe
-  // instead of only ever comparing against the single best one left.
-  const coachBoard = (
-    await prisma.coach.findMany({ where: { draftId }, orderBy: { rating: "desc" } })
-  ).filter((c) => !draftedCoachIds.has(c.id));
-
-  // One query for every team's picks instead of two sequential round trips
-  // PER team — that was the single biggest fixed cost in a large draft,
-  // since round-trip overhead dominates over each query's own execution.
-  const allPicks = await prisma.draftPick.findMany({
-    where: { draftId },
-    orderBy: { pickNumber: "asc" },
-    select: { teamId: true, slotId: true, player: { select: CANDIDATE_SELECT } },
-  });
+  const [allPicks, coachPicks, coaches] = await Promise.all([
+    prisma.draftPick.findMany({
+      where: { draftId },
+      orderBy: { pickNumber: "asc" },
+      select: { teamId: true, slotId: true, player: { select: CANDIDATE_SELECT } },
+    }),
+    prisma.coachPick.findMany({
+      where: { draftId },
+      select: { teamId: true, coachId: true },
+    }),
+    prisma.coach.findMany({ where: { draftId }, orderBy: { rating: "desc" } }),
+  ]);
+  const draftedPlayerIds = new Set(allPicks.map((pick) => pick.player.id));
+  const draftedCoachIds = new Set(coachPicks.map((pick) => pick.coachId));
+  const teamsWithCoach = new Set(coachPicks.map((pick) => pick.teamId));
+  const coachBoard = coaches.filter((coach) => !draftedCoachIds.has(coach.id));
   const picksByTeam = new Map<number, typeof allPicks>();
   for (const p of allPicks) {
     if (!picksByTeam.has(p.teamId)) picksByTeam.set(p.teamId, []);
@@ -408,27 +414,26 @@ export async function advanceDraft(draftId: number) {
     });
   }
 
-  // Position boards, refetched only when a group runs thin (see BOARD_SIZE).
+  // Four small boards, fetched once. The CPU loop stays in memory after this.
   const boards = new Map<PositionGroup, Candidate[]>();
-  async function boardFor(group: PositionGroup): Promise<Candidate[]> {
+  await Promise.all(
+    POSITION_GROUPS.map(async (group) => {
+      const rows = await prisma.player.findMany({
+        where: { positionGroup: group, league: { in: leagues }, year: { in: years } },
+        select: CANDIDATE_SELECT,
+        orderBy: { overall: "desc" },
+        take: BOARD_FETCH,
+      });
+      boards.set(
+        group,
+        rows.filter((candidate) => !draftedPlayerIds.has(candidate.id)).slice(0, BOARD_SIZE),
+      );
+    }),
+  );
+  function boardFor(group: PositionGroup): Candidate[] {
     const live = (boards.get(group) ?? []).filter((c) => !draftedPlayerIds.has(c.id));
-    if (live.length >= BOARD_REFETCH_BELOW) {
-      boards.set(group, live);
-      return live;
-    }
-    const fresh = await excludeDrafted<Candidate>(
-      (fetchTake) =>
-        prisma.player.findMany({
-          where: { positionGroup: group, league: { in: leagues }, year: { in: years } },
-          select: CANDIDATE_SELECT,
-          orderBy: { overall: "desc" },
-          take: fetchTake,
-        }),
-      draftedPlayerIds,
-      BOARD_SIZE,
-    );
-    boards.set(group, fresh);
-    return fresh;
+    boards.set(group, live);
+    return live;
   }
 
   let currentPick = draft.currentPick;
@@ -487,7 +492,7 @@ export async function advanceDraft(draftId: number) {
 
   while (currentPick <= totalPicks) {
     const { round, draftOrder } = pickInfo(currentPick, teamCount);
-    const team = teams.find((t) => t.draftOrder === draftOrder);
+    const team = teamByOrder.get(draftOrder);
     if (!team || team.id === draft.userTeamId) break;
 
     const teamId = team.id;
@@ -549,7 +554,7 @@ export async function advanceDraft(draftId: number) {
     if (!mustDraftCoach) {
       if (state.openSlots.length > 0) {
         for (const slot of state.openSlots) {
-          const board = await boardFor(slot.group);
+          const board = boardFor(slot.group);
           const scored = board
             .map((candidate) => ({ candidate, value: valueInSlot(candidate, slot) }))
             .filter((s): s is { candidate: Candidate; value: number } => s.value !== null)
@@ -572,7 +577,7 @@ export async function advanceDraft(draftId: number) {
         // silently skipped.
         if (!best) {
           for (const slot of state.openSlots) {
-            const board = await boardFor(slot.group);
+            const board = boardFor(slot.group);
             if (board.length > 0) {
               best = { surplus: 0, candidate: board[0], slot };
               break;
@@ -583,7 +588,7 @@ export async function advanceDraft(draftId: number) {
         // Bench: worth a fraction of a starting slot, so this only ever
         // wins the pick once the XI is genuinely complete.
         for (const group of POSITION_GROUPS) {
-          const board = await boardFor(group);
+          const board = boardFor(group);
           const scored = board
             .map((candidate) => ({
               candidate,
@@ -663,40 +668,24 @@ export async function advanceDraft(draftId: number) {
     currentPick += 1;
   }
 
-  // Inserted one at a time with duplicates swallowed (Prisma's SQLite
-  // connector doesn't support createMany's skipDuplicates) — this guards
-  // against two overlapping advanceDraft() calls for the same draft racing
-  // each other. The draft board page calls this on every render, so a slow
-  // render overlapping a pick's own call is a real possibility, and each
-  // call only reads its "already drafted" snapshot once at the top. Without
-  // this, the loser's batch can contain a player (or coach) the winner
-  // already committed, and a unique-constraint violation on
-  // (draftId, playerId)/(draftId, coachId)/(draftId, teamId, slotId) throws
-  // instead of just dropping that one duplicate row — which is the right
-  // outcome here: the winner's pick stands, the loser's redundant one is
-  // silently skipped rather than crashing the whole page.
-  for (const p of newPlayerPicks) {
-    try {
-      await prisma.draftPick.create({ data: { ...p, draftId } });
-    } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") continue;
-      throw e;
-    }
+  // One write for the whole CPU run. skipDuplicates covers two overlapping
+  // advanceDraft() calls racing the same window.
+  if (newPlayerPicks.length > 0) {
+    await prisma.draftPick.createMany({
+      data: newPlayerPicks.map((pick) => ({ ...pick, draftId })),
+      skipDuplicates: true,
+    });
   }
-  for (const p of newCoachPicks) {
-    try {
-      await prisma.coachPick.create({ data: { ...p, draftId } });
-    } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") continue;
-      throw e;
-    }
+  if (newCoachPicks.length > 0) {
+    await prisma.coachPick.createMany({
+      data: newCoachPicks.map((pick) => ({ ...pick, draftId })),
+      skipDuplicates: true,
+    });
   }
 
   const status = currentPick > totalPicks ? "complete" : "in_progress";
-  await prisma.draft.update({
+  return prisma.draft.update({
     where: { id: draftId },
     data: { currentPick, status },
   });
-
-  return prisma.draft.findUniqueOrThrow({ where: { id: draftId } });
 }

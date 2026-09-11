@@ -20,6 +20,7 @@ import { DraftFilters } from "@/components/draft-filters";
 import { DraftCompleteFlow, type Hindsight } from "@/components/draft-complete-flow";
 import { bestPossibleSquad, type PoolCoach, type PoolPlayer } from "@/lib/hindsight";
 import { DraftLiveFactors } from "@/components/draft-live-factors";
+import { DraftLiveLayout } from "@/components/draft-live-layout";
 import { StadiumShell } from "@/components/stadium-shell";
 import { bebas } from "@/lib/game-fonts";
 import { computeSquadRating, slotEffectiveRating, SLOT_NEUTRAL_CHEM } from "@/lib/team-rating";
@@ -68,6 +69,33 @@ function buildQueryString(params: Record<string, string | number | undefined>) {
   }
   const qs = search.toString();
   return qs ? `?${qs}` : "";
+}
+
+function remainingUserPicks(
+  currentPick: number,
+  teamCount: number,
+  userDraftOrder: number,
+  totalPicks: number,
+) {
+  let count = 0;
+  for (let pick = currentPick; pick <= totalPicks; pick++) {
+    if (pickInfo(pick, teamCount).draftOrder === userDraftOrder) count++;
+  }
+  return count;
+}
+
+function cpuPicksAfterCurrent(
+  currentPick: number,
+  teamCount: number,
+  userDraftOrder: number,
+  totalPicks: number,
+) {
+  for (let pick = currentPick + 1; pick <= totalPicks; pick++) {
+    if (pickInfo(pick, teamCount).draftOrder === userDraftOrder) {
+      return pick - currentPick - 1;
+    }
+  }
+  return Math.max(0, totalPicks - currentPick);
 }
 
 function potBadgeClass(gap: number): string {
@@ -406,7 +434,7 @@ export default async function DraftBoardPage({
     });
 
     return (
-      <StadiumShell align="center">
+      <StadiumShell fill>
         <DraftCompleteFlow
           clubName={userTeam.shortName}
           formationKey={userTeam.formation}
@@ -444,6 +472,18 @@ export default async function DraftBoardPage({
   }
 
   const { round } = pickInfo(draft.currentPick, teamCount);
+  const yourPicksLeft = remainingUserPicks(
+    draft.currentPick,
+    teamCount,
+    userTeam.draftOrder,
+    totalPicks,
+  );
+  const cpuAfterYou = cpuPicksAfterCurrent(
+    draft.currentPick,
+    teamCount,
+    userTeam.draftOrder,
+    totalPicks,
+  );
   const myHasCoach = myCoachPick !== null;
   const mustDraftCoachNow = rules.coach && round === rounds && !myHasCoach;
 
@@ -570,7 +610,7 @@ export default async function DraftBoardPage({
   return (
     <StadiumShell fill>
       <main className="mx-auto flex h-full min-h-0 w-full max-w-[1400px] flex-col">
-        <header className="flex shrink-0 items-center justify-between gap-4 pb-3">
+        <header className="flex shrink-0 items-center justify-between gap-3 pb-2">
           <div className="flex min-w-0 items-baseline gap-3">
             <h1 className={`${bebas.className} truncate text-3xl tracking-wide text-white`}>
               {userTeam.shortName}
@@ -584,7 +624,7 @@ export default async function DraftBoardPage({
           <div className="flex items-center gap-4 sm:gap-5">
             {mySquad.length > 0 && (
               <>
-                <div className="text-right">
+                <div className="hidden text-right sm:block">
                   <div className={`${bebas.className} text-2xl leading-none text-white`}>
                     {unified.rating.toFixed(1)}
                   </div>
@@ -641,62 +681,45 @@ export default async function DraftBoardPage({
                 )}
               </>
             )}
-            <div className="w-28 sm:w-40">
-              <div className="mb-1 flex justify-between text-[10px] tracking-[0.16em] text-white/45 uppercase">
-                <span>R{round}</span>
-                <span>
-                  {draft.currentPick}/{totalPicks}
-                </span>
-              </div>
-              <div className="h-0.5 bg-white/15">
-                <div className="h-full bg-white" style={{ width: `${pickProgress}%` }} />
-              </div>
-            </div>
           </div>
         </header>
 
-        <details open className="group shrink-0 pb-3 lg:hidden">
-          <summary
-            className={`${bebas.className} flex min-h-11 cursor-pointer list-none items-center justify-between border border-white/20 bg-black/45 px-3 text-base tracking-[0.14em] text-white/75 [&::-webkit-details-marker]:hidden`}
-          >
-            Squad &amp; factors · {me.starters.size}/{starterCount}
-            <span aria-hidden className="text-xl transition group-open:rotate-45">
-              +
-            </span>
-          </summary>
-          <div className="max-h-[52dvh] overflow-y-auto pt-2">
-            <div className="mx-auto aspect-[3/4] h-[36dvh] min-h-[220px] max-h-[300px]">
-              <SlotPitch
-                compact
-                formation={me.formation}
-                occupants={myOccupants}
-                selectedSlotId={targetSlot?.id ?? null}
-                slotHref={slotHref}
-              />
+        <div className="mb-3 shrink-0 border border-white/20 bg-black/50 px-3 py-2.5">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p className={`${bebas.className} text-sm tracking-[0.28em] text-emerald-300`}>
+                On the clock
+              </p>
+              <p className={`${bebas.className} mt-0.5 text-3xl leading-none tracking-wide text-white`}>
+                Pick {draft.currentPick}
+                <span className="text-xl text-white/40"> / {totalPicks}</span>
+              </p>
             </div>
-            {mySquad.length > 0 && (
-              <div className="mt-2">
-                <DraftLiveFactors
-                  lines={unified.lines}
-                  chemistry={teamChemistry}
-                  chemCoachSwing={unified.chemCoachSwing}
-                  fitCost={unified.fitCost}
-                  naturalStarters={naturalStartersLive}
-                  filledSlots={me.starters.size}
-                  starterCount={starterCount}
-                  experienceLabel={unified.experienceLabel}
-                  experienceDelta={unified.experienceDelta}
-                  coachRating={myCoachRating}
-                  coachName={myCoachPick?.coach.name ?? null}
-                  rules={rules}
-                />
-              </div>
-            )}
+            <div className="text-right">
+              <p className={`${bebas.className} text-2xl leading-none text-white`}>
+                {yourPicksLeft}
+              </p>
+              <p className="text-[10px] tracking-[0.16em] text-white/45 uppercase">
+                {yourPicksLeft === 1 ? "pick left" : "picks left"}
+              </p>
+            </div>
           </div>
-        </details>
+          <p className="mt-1.5 text-[12px] leading-snug text-white/60">
+            Round {round}
+            {cpuAfterYou > 0
+              ? ` · ${cpuAfterYou} club${cpuAfterYou === 1 ? "" : "s"} pick after you`
+              : " · last pick of the snake"}
+          </p>
+          <div className="mt-2 h-0.5 bg-white/15">
+            <div className="h-full bg-white" style={{ width: `${pickProgress}%` }} />
+          </div>
+        </div>
 
-        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(320px,400px)_1fr]">
-          <section className="flex min-h-0 flex-col bg-black/50 backdrop-blur-sm">
+        <DraftLiveLayout
+          currentPick={draft.currentPick}
+          cpuPicksAfterYou={cpuAfterYou}
+          board={
+          <section className="flex min-h-0 flex-1 flex-col bg-black/50 backdrop-blur-sm">
             <nav className="flex shrink-0 flex-wrap items-center gap-1 px-4 pt-3">
               {mustDraftCoachNow ? (
                 <span className={`${bebas.className} px-2 py-1 text-lg tracking-wide text-white`}>
@@ -937,8 +960,9 @@ export default async function DraftBoardPage({
               </>
             )}
           </section>
-
-          <section className="relative hidden min-h-0 flex-col lg:flex">
+          }
+          team={
+          <section className="relative flex min-h-0 flex-1 flex-col">
             <div className="mb-2 flex shrink-0 items-center justify-between text-[11px] tracking-[0.16em] text-white/40 uppercase">
               <span>
                 {me.starters.size}/{starterCount} {mode.shortLabel}
@@ -948,14 +972,16 @@ export default async function DraftBoardPage({
                 <span className="text-white/70">{myCoachPick.coach.name}</span>
               )}
             </div>
-            <div className="min-h-0 flex-1">
-              <SlotPitch
-                compact
-                formation={me.formation}
-                occupants={myOccupants}
-                selectedSlotId={targetSlot?.id ?? null}
-                slotHref={slotHref}
-              />
+            <div className="mx-auto w-full max-w-md shrink-0 lg:aspect-auto lg:h-full lg:min-h-0 lg:max-w-none lg:flex-1 lg:shrink">
+              <div className="aspect-[3/4] h-auto w-full lg:aspect-auto lg:h-full">
+                <SlotPitch
+                  compact
+                  formation={me.formation}
+                  occupants={myOccupants}
+                  selectedSlotId={targetSlot?.id ?? null}
+                  slotHref={slotHref}
+                />
+              </div>
             </div>
             {mySquad.length > 0 && (
               <div className="mt-3 shrink-0">
@@ -976,7 +1002,8 @@ export default async function DraftBoardPage({
               </div>
             )}
           </section>
-        </div>
+          }
+        />
       </main>
     </StadiumShell>
   );

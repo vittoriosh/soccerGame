@@ -155,6 +155,14 @@ export function DraftCompleteFlow({
 
   // Viewing a rival squad takes over the screen entirely — it's the same
   // pitch, just someone else's, so it needs the same room.
+  const frameClass = `${barlow.className} mx-auto flex h-full min-h-0 w-full max-w-4xl flex-col text-center`;
+  const scrollerClass =
+    "flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]";
+  const actionsClass =
+    "flex shrink-0 flex-wrap items-center justify-center gap-3 px-1 pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:gap-4";
+  const primaryBtn = `${bebas.className} min-h-12 border-2 border-white bg-white px-8 py-3 text-2xl tracking-[0.12em] text-black transition hover:bg-transparent hover:text-white sm:min-h-14 sm:px-12 sm:py-5 sm:text-3xl`;
+  const secondaryBtn = `${bebas.className} min-h-12 border-2 border-white/70 bg-transparent px-6 py-3 text-2xl tracking-[0.12em] text-white transition hover:border-white sm:min-h-14 sm:px-10 sm:py-5 sm:text-3xl`;
+
   if (viewedTeam) {
     const rivalFormation = getFormation(viewedTeam.formation);
     const rivalOccupants = new Map(
@@ -162,34 +170,32 @@ export function DraftCompleteFlow({
     );
     const gap = viewedTeam.rating - rating;
     return (
-      <div className={`${barlow.className} flex w-full max-w-4xl flex-col items-center text-center`}>
-        <div key={viewedTeam.teamId} className="home-fade-in w-full">
-          <p className={`${bebas.className} text-sm tracking-[0.35em] text-white/55`}>
-            Rival · {rivalFormation.name}
-          </p>
-          <h1 className={`${bebas.className} mt-2 text-5xl tracking-wide text-white sm:text-6xl`}>
-            {viewedTeam.shortName}
-          </h1>
-          <p className="mt-2 text-sm text-white/55">
-            Rating {viewedTeam.rating.toFixed(1)} · Chem {viewedTeam.chemistry.toFixed(1)}
-            {viewedTeam.coachName ? ` · ${viewedTeam.coachName} (${viewedTeam.coachRating})` : ""}
-          </p>
-          {!viewedTeam.isYou && (
-            <p className={`mt-1 text-sm font-semibold ${diffTone(-gap)}`}>
-              {formatSigned(-gap)} vs your rating
+      <div className={frameClass}>
+        <div className={scrollerClass}>
+          <div key={viewedTeam.teamId} className="home-fade-in my-auto w-full">
+            <p className={`${bebas.className} text-sm tracking-[0.35em] text-white/55`}>
+              Rival · {rivalFormation.name}
             </p>
-          )}
-          <div className="mx-auto mt-6 aspect-[3/4] w-full max-w-sm sm:max-w-md">
-            <SlotPitch formation={rivalFormation} occupants={rivalOccupants} />
+            <h1 className={`${bebas.className} mt-2 text-5xl tracking-wide text-white sm:text-6xl`}>
+              {viewedTeam.shortName}
+            </h1>
+            <p className="mt-2 text-sm text-white/55">
+              Rating {viewedTeam.rating.toFixed(1)} · Chem {viewedTeam.chemistry.toFixed(1)}
+              {viewedTeam.coachName ? ` · ${viewedTeam.coachName} (${viewedTeam.coachRating})` : ""}
+            </p>
+            {!viewedTeam.isYou && (
+              <p className={`mt-1 text-sm font-semibold ${diffTone(-gap)}`}>
+                {formatSigned(-gap)} vs your rating
+              </p>
+            )}
+            <div className="mx-auto mt-6 aspect-[3/4] w-full max-w-sm sm:max-w-md">
+              <SlotPitch formation={rivalFormation} occupants={rivalOccupants} />
+            </div>
           </div>
         </div>
 
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-          <button
-            type="button"
-            onClick={() => setViewTeamId(null)}
-            className={`${bebas.className} border-2 border-white bg-white px-12 py-5 text-3xl tracking-[0.12em] text-black transition hover:bg-transparent hover:text-white`}
-          >
+        <div className={actionsClass}>
+          <button type="button" onClick={() => setViewTeamId(null)} className={primaryBtn}>
             Back to table
           </button>
         </div>
@@ -198,8 +204,9 @@ export function DraftCompleteFlow({
   }
 
   return (
-    <div className={`${barlow.className} flex w-full max-w-4xl flex-col items-center text-center`}>
-      <div key={`${step}-${lineIndex}`} className="home-fade-in w-full">
+    <div className={frameClass}>
+      <div className={scrollerClass}>
+        <div key={`${step}-${lineIndex}`} className="home-fade-in my-auto w-full">
         {step === "squad" && (
           <>
             <p className={`${bebas.className} text-sm tracking-[0.35em] text-white/55`}>
@@ -394,41 +401,28 @@ export function DraftCompleteFlow({
             </div>
           </>
         )}
+        </div>
       </div>
 
-      <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+      <div className={actionsClass}>
         {step !== "squad" && (
-          <button
-            type="button"
-            onClick={goBack}
-            className={`${bebas.className} border-2 border-white/60 bg-black/55 px-10 py-5 text-3xl tracking-[0.12em] text-white transition hover:border-white`}
-          >
+          <button type="button" onClick={goBack} className={secondaryBtn}>
             Back
           </button>
         )}
         {continueLabel && (
-          <button
-            type="button"
-            onClick={goNext}
-            className={`${bebas.className} border-2 border-white bg-white px-12 py-5 text-3xl tracking-[0.12em] text-black transition hover:bg-transparent hover:text-white`}
-          >
+          <button type="button" onClick={goNext} className={primaryBtn}>
             {continueLabel}
           </button>
         )}
         {step === "result" && (
           <>
             {packsHref && (
-              <Link
-                href={packsHref}
-                className={`${bebas.className} border-2 border-white/60 bg-black/55 px-10 py-5 text-3xl tracking-[0.12em] text-white transition hover:border-white`}
-              >
+              <Link href={packsHref} className={secondaryBtn}>
                 Card Packs
               </Link>
             )}
-            <Link
-              href="/"
-              className={`${bebas.className} border-2 border-white bg-white px-12 py-5 text-3xl tracking-[0.12em] text-black transition hover:bg-transparent hover:text-white`}
-            >
+            <Link href="/" className={primaryBtn}>
               Menu
             </Link>
           </>
