@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { playerImageSrc, clubLogoSrc } from "@/lib/player-image";
 import { flagUrl } from "@/lib/country-flags";
 import { cardTierAccentBorderClass } from "@/lib/card-tier";
+import { PLAYER_CARD_SELECT } from "@/lib/player-fields";
 import { StadiumShell } from "@/components/stadium-shell";
 import { bebas } from "@/lib/game-fonts";
 
@@ -32,6 +33,7 @@ export default async function PlayersPage({
   const [players, total] = await Promise.all([
     prisma.player.findMany({
       where,
+      select: PLAYER_CARD_SELECT,
       orderBy: { overall: "desc" },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,

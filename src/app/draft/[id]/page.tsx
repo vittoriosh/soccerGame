@@ -30,6 +30,7 @@ import {
 } from "@/lib/scoring-rules";
 import { gameModeConfig, supportsDivisions } from "@/lib/game-mode";
 import { seasonOutcome } from "@/lib/season-divisions";
+import { PLAYER_CARD_SELECT } from "@/lib/player-fields";
 import { makePick, makeCoachPick } from "./actions";
 
 const PAGE_SIZE = 8;
@@ -189,6 +190,7 @@ async function bestPossibleForUser(args: {
   const [pool, coachPool] = await Promise.all([
     prisma.player.findMany({
       where: { league: { in: args.leagues }, year: { in: args.years } },
+      select: PLAYER_CARD_SELECT,
       orderBy: { overall: "desc" },
       take: HINDSIGHT_POOL_SIZE,
     }),
@@ -565,6 +567,7 @@ export default async function DraftBoardPage({
     const [foundPlayers, total] = await Promise.all([
       prisma.player.findMany({
         where,
+        select: PLAYER_CARD_SELECT,
         orderBy,
         skip: (page - 1) * PAGE_SIZE,
         take: PAGE_SIZE,

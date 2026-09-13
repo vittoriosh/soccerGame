@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { getPlayerCatalog } from "@/lib/player-catalog";
 import {
   PREMIER_LEAGUE,
   TOP_5_LEAGUES,
@@ -10,20 +10,8 @@ import { DraftSetupWizard } from "@/components/draft-setup-wizard";
 export const dynamic = "force-dynamic";
 
 export default async function LeaguePickerPage() {
-  const [distinctLeagues, distinctYears] = await Promise.all([
-    prisma.player.findMany({
-      distinct: ["league"],
-      select: { league: true },
-      orderBy: { league: "asc" },
-    }),
-    prisma.player.findMany({
-      distinct: ["year"],
-      select: { year: true },
-      orderBy: { year: "desc" },
-    }),
-  ]);
-  const leagues = distinctLeagues
-    .map((l) => l.league)
+  const catalog = await getPlayerCatalog();
+  const leagues = catalog.leagues
     .filter(Boolean)
     .sort((a, b) => {
       if (a === PREMIER_LEAGUE) return -1;
@@ -32,7 +20,7 @@ export default async function LeaguePickerPage() {
     });
   const topLeagues = TOP_5_LEAGUES.filter((l) => leagues.includes(l));
   const otherLeagues = leagues.filter((l) => !topLeagues.includes(l));
-  const availableYears = distinctYears.map((y) => y.year);
+  const availableYears = catalog.years;
 
   return (
     <StadiumShell align="center">

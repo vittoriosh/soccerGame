@@ -7,7 +7,7 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "../src/lib/db";
 import { Prisma } from "../src/generated/prisma/client";
-import { createDraft, availablePlayerYears } from "../src/lib/create-draft";
+import { createDraft } from "../src/lib/create-draft";
 import {
   divisionScope,
   rollDivisionYears,
@@ -24,6 +24,8 @@ import {
 import { shuffled } from "../src/lib/league-data";
 import { advanceDraft } from "../src/lib/draft";
 import { recordCareerResult } from "../src/lib/career-leaderboard";
+import { stripDraftPayload } from "../src/lib/strip-draft";
+import { availablePlayerYears } from "../src/lib/player-catalog";
 import { evaluateSquad } from "../src/lib/squad-evaluation";
 import type { GameMode } from "../src/lib/game-mode";
 
@@ -259,6 +261,7 @@ async function finishSeason(args: {
     data: { userTeamId: userTeam.id, status: "complete" },
   });
   await recordCareerResult(draftId);
+  await stripDraftPayload(draftId);
   const outcome = seasonOutcome(rank, teams.length, args.division);
 
   return {

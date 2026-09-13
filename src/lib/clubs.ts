@@ -59,38 +59,98 @@ function squadStrength(avgOverall: number, maxOverall: number): number {
  */
 export type LeagueClubPool = { full: RealClub[]; all: RealClub[] };
 
-export async function clubPoolForLeague(
-  league: string,
-  years: number[],
-): Promise<LeagueClubPool> {
-  const rows = await prisma.player.groupBy({
-    by: ["club", "clubId"],
+type ClubYearRow = {
+  club: string;
+  clubId: number | null;
+  year: number;
+  _avg: { overall: number | null };
+  _max: { overall: number | null };
+  _count: { _all: number };
+};
+
+const clubRowCache = new Map<string, Promise<ClubYearRow[]>>();
+
+function clubCacheKey(league: string, years: number[]) {
+  return `${league}|${[...years].sort((a, b) => a - b).join(",")}`;
+}
+
+async function clubRowsForLeague(league: string, years: number[]): Promise<ClubYearRow[]> {
+  const key = clubCacheKey(league, years);
+  const cached = clubRowCache.get(key);
+  if (cached) return cached;
+
+  const pending = prisma.player.groupBy({
+    by: ["club", "clubId", "year"],
     where: { league, year: { in: years }, club: { not: "" } },
     _avg: { overall: true },
     _max: { overall: true },
     _count: { _all: true },
   });
+  clubRowCache.set(key, pending);
+  try {
+    return await pending;
+  } catch (error) {
+    clubRowCache.delete(key);
+    throw error;
+  }
+}
 
+function poolsFromRows(rows: ClubYearRow[]): LeagueClubPool {
   const clubs = rows
-    .map((row) => ({
-      name: row.club,
-      clubId: row.clubId,
-      size: row._count._all,
-      strength: squadStrength(row._avg.overall ?? 0, row._max.overall ?? 0),
-    }))
-    // A multi-year draft lists the same club once per year it appears in,
-    // and sofifa sometimes spells the same club two ways ("Atlético" vs
-    // "Atletico"). Collapse by real club id first, then by slug, keeping
-    // the strongest version so we don't try to field the same side twice.
-    .reduce((acc, club) => {
-      const key =
-        club.clubId != null ? `id:${club.clubId}` : `slug:${slugify(club.name)}`;
-      const existing = acc.get(key);
-      if (!existing || club.strength > existing.strength) acc.set(key, club);
-      return acc;
-    }, new Map<string, { name: string; clubId: number | null; size: number; strength: number }>());
+    .reduce(
+      (acc, row) => {
+        const key =
+          row.clubId != null ? `id:${row.clubId}` : `slug:${slugify(row.club)}`;
+        const size = row._count._all;
+        const avg = row._avg.overall ?? 0;
+        const max = row._max.overall ?? 0;
+        const yearStrength = squadStrength(avg, max);
+        const existing = acc.get(key);
+        if (!existing) {
+          acc.set(key, {
+            name: row.club,
+            clubId: row.clubId,
+            size,
+            weightedOverall: avg * size,
+            maxOverall: max,
+            bestYearStrength: yearStrength,
+          });
+          return acc;
+        }
+        existing.size += size;
+        existing.weightedOverall += avg * size;
+        existing.maxOverall = Math.max(existing.maxOverall, max);
+        if (yearStrength > existing.bestYearStrength) {
+          existing.name = row.club;
+          existing.clubId = row.clubId;
+          existing.bestYearStrength = yearStrength;
+        }
+        return acc;
+      },
+      new Map<
+        string,
+        {
+          name: string;
+          clubId: number | null;
+          size: number;
+          weightedOverall: number;
+          maxOverall: number;
+          bestYearStrength: number;
+        }
+      >(),
+    );
 
-  const ranked = Array.from(clubs.values()).sort((a, b) => b.strength - a.strength);
+  const ranked = Array.from(clubs.values())
+    .map((club) => ({
+      name: club.name,
+      clubId: club.clubId,
+      size: club.size,
+      strength: squadStrength(
+        club.size > 0 ? club.weightedOverall / club.size : 0,
+        club.maxOverall,
+      ),
+    }))
+    .sort((a, b) => b.strength - a.strength);
   const bySlug = new Map<string, (typeof ranked)[number]>();
   for (const club of ranked) {
     const slug = slugify(club.name);
@@ -109,6 +169,13 @@ export async function clubPoolForLeague(
     full: unique.filter((c) => c.size >= MIN_SQUAD_SIZE).map(toClub),
     all: unique.map(toClub),
   };
+}
+
+export async function clubPoolForLeague(
+  league: string,
+  years: number[],
+): Promise<LeagueClubPool> {
+  return poolsFromRows(await clubRowsForLeague(league, years));
 }
 
 /**
@@ -174,12 +241,11 @@ export async function coachPoolForLeague(
   // coach market the same way it's a deeper player pool. Seasons are
   // interleaved rather than concatenated so the strongest clubs from every
   // year reach the board, not all of one season before any of the next.
-  const seasons = await Promise.all(
-    years.map(async (year) => {
-      const pool = await clubPoolForLeague(league, [year]);
-      return pool.full.length > 0 ? pool.full : pool.all;
-    }),
-  );
+  const rows = await clubRowsForLeague(league, years);
+  const seasons = years.map((year) => {
+    const pool = poolsFromRows(rows.filter((row) => row.year === year));
+    return pool.full.length > 0 ? pool.full : pool.all;
+  });
   const realClubNames = new Set(real.map((coach) => coach.club));
   const hosts: RealClub[] = [];
   for (let rank = 0; rank < Math.max(0, ...seasons.map((s) => s.length)); rank++) {

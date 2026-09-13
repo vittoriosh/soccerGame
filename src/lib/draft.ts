@@ -158,23 +158,10 @@ export async function getTeamSquadState(draftId: number, teamId: number, formati
   };
 }
 
-// SQLite bounds how many parameters a single query can bind, and a `NOT IN
-// (...)` exclusion list blows past that once a draft has run long enough to
-// rack up hundreds of picks — Prisma can't auto-split a negation filter
-// across queries the way it can a positive `IN`. Fetching a generous buffer
-// of top-rated matches with NO id exclusion in SQL, then excluding already
-// -taken ids in JS, sidesteps the limit entirely and — inside advanceDraft,
-// where this matters most — also correctly excludes picks made earlier in
-// the SAME call that haven't been persisted to the DB yet (a relational
-// "not drafted in this draft" filter wouldn't see those).
+// Postgres can bind a large NOT IN list. We still filter in JS afterwards
+// so in-memory picks from the same advanceDraft call stay excluded.
+const PG_NOT_IN_SAFE = 8000;
 const CANDIDATE_FETCH_BUFFER = 300;
-// A late, narrow scope (one position group within one league, say) can have
-// almost its entire top end already drafted — a single fixed-size buffer
-// isn't always enough to still find `take` survivors. Retry with a bigger
-// buffer rather than silently returning too few (which upstream reads as
-// "nothing left" and can end a CPU team's turn early). Stops once a fetch
-// comes back smaller than requested — that means the DB has no more rows
-// matching at all, not just more than fit in this buffer.
 const CANDIDATE_FETCH_CAP = 20000;
 
 export async function excludeDrafted<T extends { id: number }>(
@@ -207,6 +194,43 @@ const CANDIDATE_SELECT = {
   nationality: true,
   league: true,
 } as const;
+
+type UndraftedWhere = {
+  positionGroup?: string;
+  league?: { in: string[] };
+  year?: { in: number[] };
+};
+
+export async function fetchUndraftedPlayers<T extends { id: number }>(args: {
+  where: UndraftedWhere;
+  select: typeof CANDIDATE_SELECT | { id: true };
+  excludeIds: Set<number>;
+  take: number;
+}): Promise<T[]> {
+  const exclude = [...args.excludeIds];
+  if (exclude.length === 0 || exclude.length <= PG_NOT_IN_SAFE) {
+    return prisma.player.findMany({
+      where: {
+        ...args.where,
+        ...(exclude.length > 0 ? { id: { notIn: exclude } } : {}),
+      },
+      select: args.select,
+      orderBy: { overall: "desc" },
+      take: args.take,
+    }) as Promise<T[]>;
+  }
+  return excludeDrafted(
+    (fetchTake) =>
+      prisma.player.findMany({
+        where: args.where,
+        select: args.select,
+        orderBy: { overall: "desc" },
+        take: fetchTake,
+      }) as Promise<T[]>,
+    args.excludeIds,
+    args.take,
+  );
+}
 
 type Candidate = {
   id: number;
@@ -447,17 +471,12 @@ export async function advanceDraft(draftId: number) {
   const boards = new Map<PositionGroup, Candidate[]>();
   await Promise.all(
     POSITION_GROUPS.map(async (group) => {
-      const live = await excludeDrafted(
-        (take) =>
-          prisma.player.findMany({
-            where: { positionGroup: group, league: { in: leagues }, year: { in: years } },
-            select: CANDIDATE_SELECT,
-            orderBy: { overall: "desc" },
-            take,
-          }),
-        draftedPlayerIds,
-        boardTake,
-      );
+      const live = await fetchUndraftedPlayers<Candidate>({
+        where: { positionGroup: group, league: { in: leagues }, year: { in: years } },
+        select: CANDIDATE_SELECT,
+        excludeIds: draftedPlayerIds,
+        take: boardTake,
+      });
       boards.set(group, live);
     }),
   );

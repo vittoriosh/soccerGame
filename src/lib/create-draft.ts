@@ -230,11 +230,4 @@ export async function createDraft(args: CreateDraftArgs): Promise<number> {
   );
 }
 
-export async function availablePlayerYears(): Promise<number[]> {
-  const rows = await prisma.player.findMany({
-    distinct: ["year"],
-    select: { year: true },
-    orderBy: { year: "desc" },
-  });
-  return rows.map((row) => row.year);
-}
+export { availablePlayerYears } from "@/lib/player-catalog";

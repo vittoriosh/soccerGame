@@ -110,6 +110,10 @@ model Player {
   // very noticeably slow (this index was added after a real lag report)
   // once the multi-year import brought the table to ~180k rows.
   @@index([positionGroup, league, overall])
+  // Draft boards always filter league + year together and sort by overall.
+  @@index([positionGroup, league, year, overall])
+  // Club-pool groupBy and setup DISTINCT league/year scans.
+  @@index([league, year, club])
   // Same story for the CPU "affinity" lookup (same club/nation as a
   // teammate already drafted) — club/nationality were unindexed text
   // columns being scanned row-by-row after the positionGroup narrow-down.

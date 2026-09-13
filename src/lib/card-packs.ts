@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { getDraftedPlayerIds, excludeDrafted, parseDraftYears } from "@/lib/draft";
+import { getDraftedPlayerIds, fetchUndraftedPlayers, parseDraftYears } from "@/lib/draft";
 import { shuffled } from "@/lib/league-data";
 
 const PACK_SIZE = 5;
@@ -66,24 +66,16 @@ export async function tradeInPlayersForPacks(
 
   for (const pick of myPicks) {
     const draftedIds = new Set(await getDraftedPlayerIds(draftId));
-    const candidatePool = await excludeDrafted(
-      (fetchTake) =>
-        prisma.player.findMany({
-          where: {
-            positionGroup: pick.player.positionGroup,
-            league: { in: leagues },
-            year: { in: years },
-          },
-          orderBy: { overall: "desc" },
-          take: fetchTake,
-        }),
-      draftedIds,
-      // Shuffling happens next, so fetch enough of the top pool that a
-      // random 5-slice out of it stays plausible (not literally the top 5
-      // every time), while still comfortably clearing SQLite's parameter
-      // limit — see excludeDrafted's own comment.
-      50,
-    );
+    const candidatePool = await fetchUndraftedPlayers<{ id: number }>({
+      where: {
+        positionGroup: pick.player.positionGroup,
+        league: { in: leagues },
+        year: { in: years },
+      },
+      select: { id: true },
+      excludeIds: draftedIds,
+      take: 50,
+    });
     const candidates = shuffled(candidatePool).slice(0, PACK_SIZE);
     if (candidates.length === 0) {
       throw new Error("No eligible players left to fill that pack right now");
