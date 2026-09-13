@@ -12,7 +12,12 @@ if (!databaseUrl) {
 }
 
 const prisma = new PrismaClient({
-  adapter: new PrismaPg({ connectionString: databaseUrl }),
+  adapter: new PrismaPg({
+    connectionString: databaseUrl,
+    ...(databaseUrl.includes(":6543") || databaseUrl.includes("pgbouncer=true")
+      ? { max: 1 }
+      : {}),
+  }),
 });
 // Both files share the same column layout (player_id, fifa_version, ...) —
 // years are derived per-row from fifa_version, not hardcoded per file, so

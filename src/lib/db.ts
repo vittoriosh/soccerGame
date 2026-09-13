@@ -18,9 +18,17 @@ function createPrismaClient() {
     );
   }
 
+  // Transaction poolers (Supabase 6543) do not support prepared statements.
+  const transactionPooler =
+    connectionString.includes(":6543") ||
+    connectionString.includes("pgbouncer=true");
+
   // Driver adapter uses the Wasm query engine, so Vercel does not need the
   // missing rhel-openssl native binary that breaks custom-output deploys.
-  const adapter = new PrismaPg({ connectionString });
+  const adapter = new PrismaPg({
+    connectionString,
+    ...(transactionPooler ? { max: 1 } : {}),
+  });
   return new PrismaClient({ adapter });
 }
 

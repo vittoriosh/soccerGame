@@ -10,11 +10,15 @@
     "check": "npm run lint && tsc --noEmit && npm run build",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate deploy",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "db:dump": "tsx --env-file=.env scripts/copy-postgres.ts dump",
+    "db:restore": "tsx --env-file=.env scripts/copy-postgres.ts restore"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^6.19.3",
     "@prisma/client": "6.19.3",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.116.0",
     "@vercel/analytics": "^2.0.1",
     "next": "16.3.3",
     "pg": "^8.23.0",

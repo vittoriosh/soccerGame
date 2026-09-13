@@ -50,6 +50,8 @@ next-env.d.ts
 /dev.db-journal
 /prisma/dev.db
 /prisma/dev.db-journal
+/tmp/*.dump
+/tmp/
 
 # large source datasets, re-copy from Downloads if needed
 /data/players.csv

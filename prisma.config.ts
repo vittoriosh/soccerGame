@@ -13,6 +13,11 @@ export default defineConfig({
   datasource: {
     // Do not use env("DATABASE_URL") here — that throws during `prisma generate`
     // (postinstall / Vercel build) when the variable is not set yet.
-    url: process.env.DATABASE_URL ?? "postgresql://postgres:postgres@localhost:5432/soccer_game",
+    // DIRECT_URL (session/direct, port 5432) is required for migrate on
+    // Supabase transaction poolers. Fall back to DATABASE_URL otherwise.
+    url:
+      process.env.DIRECT_URL ??
+      process.env.DATABASE_URL ??
+      "postgresql://postgres:postgres@localhost:5432/soccer_game",
   },
 });
